@@ -13,28 +13,34 @@ def extract_text_from_pdf(pdf_file):
         return "\n".join(page.extract_text() for page in pdf.pages if page.extract_text())
 
 import openai
+import time
 
-import openai
-
-def summarize_with_ai(text):
+def summarize_with_ai(text, max_retries=3):
     prompt = f"Summarize the following aircraft service bulletin:\n\n{text}"
-    try:
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are an expert technical reviewer."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.2
-        )
-        return response.choices[0].message.content  # ✅ move inside the try block
+    
+    for attempt in range(max_retries):
+        try:
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are an expert technical reviewer."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.2
+            )
+            return response.choices[0].message.content
+        
+        except openai.RateLimitError:
+            wait_time = (2 ** attempt) + 1  # exponential backoff: 3s, 5s, 9s...
+            print(f"⚠️ Rate limit hit. Retrying in {wait_time} seconds...")
+            time.sleep(wait_time)
+        
+        except openai.AuthenticationError:
+            return "❌ Invalid API key. Please check your OpenAI credentials."
+        
+        except Exception as e:
+            return f"❌ An error occurred: {str(e)}"
 
-    except openai.RateLimitError:
-        return "⚠️ Rate limit exceeded. Please wait and try again later."
+    return "⚠️ Repeated rate limit errors. Please try again later or check your OpenAI usage."
 
-    except openai.AuthenticationError:
-        return "❌ Invalid API key. Please check your OpenAI credentials."
-
-    except Exception as e:
-        return f"❌ An error occurred: {str(e)}"
 
