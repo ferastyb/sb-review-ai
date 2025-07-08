@@ -14,6 +14,8 @@ def extract_text_from_pdf(pdf_file):
 
 import openai
 
+import openai
+
 def summarize_with_ai(text):
     prompt = f"Summarize the following aircraft service bulletin:\n\n{text}"
     try:
@@ -25,7 +27,7 @@ def summarize_with_ai(text):
             ],
             temperature=0.2
         )
-        return response.choices[0].message.content
+        return response.choices[0].message.content  # ✅ move inside the try block
 
     except openai.RateLimitError:
         return "⚠️ Rate limit exceeded. Please wait and try again later."
@@ -35,3 +37,4 @@ def summarize_with_ai(text):
 
     except Exception as e:
         return f"❌ An error occurred: {str(e)}"
+
