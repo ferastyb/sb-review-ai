@@ -24,7 +24,7 @@ if uploaded_files:
 
                 if "error" in result:
                     st.error("❌ GPT failed to summarize. Details: " + result["error"])
-                    summary = full_text[:3000] + "..."
+                    summary = full_text[:30000] + "..."
                     aircraft = ata = system = action = compliance = compliance_status = group = "N/A"
                 else:
                     summary = result.get("raw_summary", str(result))
