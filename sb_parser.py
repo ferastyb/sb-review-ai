@@ -4,16 +4,14 @@ import os
 import time
 import json
 import re
+from datetime import datetime, timedelta
 
-# Load API key from environment variable
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Extract text from all pages in PDF
 def extract_text_from_pdf(pdf_file):
     with pdfplumber.open(pdf_file) as pdf:
         return "\n".join(page.extract_text() for page in pdf.pages if page.extract_text())
 
-# Try to extract relevant sections from the PDF text
 def slice_sections(text):
     labels = [
         "Effectivity", "Applicability", "Affected Aircraft",
@@ -30,15 +28,20 @@ def slice_sections(text):
             continue
     return sections
 
-# Use GPT to summarize extracted SB text into structured JSON
-def summarize_with_ai(text, max_retries=3):
+def parse_compliance_days(compliance_text):
+    match = re.search(r"(\d+)\s*(calendar|flight)?\s*day", compliance_text, re.IGNORECASE)
+    if match:
+        return int(match.group(1))
+    return None
+
+def summarize_with_ai(text, inspection_date=None, max_retries=3):
     sections = slice_sections(text)
     cleaned_text = "\n\n".join(sections.values()) if sections else text
 
     prompt = f"""
-You are an AI assistant helping extract structured information from aircraft service bulletins.
+You are an AI assistant extracting structured data from aircraft service bulletins.
 
-Your task is to return only valid JSON (no explanation or commentary). Use this format exactly:
+Return only valid JSON. Follow this structure exactly:
 
 {{
   "aircraft": ["model1", "model2"],
@@ -46,11 +49,11 @@ Your task is to return only valid JSON (no explanation or commentary). Use this 
   "system": "Affected system or part",
   "action": "Brief action (e.g. modify, inspect, power cycle)",
   "compliance": "Compliance recommendation or deadline",
-  "reason": "Why this bulletin is issued (e.g. safety, data update)",
+  "reason": "Reason for issuance",
   "sb_id": "Service Bulletin number"
 }}
 
-Text to process:
+Text:
 \"\"\"
 {cleaned_text}
 \"\"\"
@@ -68,26 +71,30 @@ Text to process:
             )
 
             content = response.choices[0].message.content.strip()
+            print("🧠 GPT Response:", content)
 
-            # 🔍 DEBUG: Show what GPT returned
-            print("🧠 GPT Response (raw):")
-            print(content)
-
-            # Try parsing the full response as JSON
-            try:
-                return json.loads(content)
-            except json.JSONDecodeError:
-                # Try to extract JSON block from a noisy response
-                match = re.search(r"\{[\s\S]*\}", content)
-                if match:
-                    try:
-                        return json.loads(match.group())
-                    except json.JSONDecodeError:
-                        return {"error": "Still invalid after cleanup"}
+            match = re.search(r"\{[\s\S]*\}", content)
+            if not match:
                 return {"error": "Invalid JSON from GPT"}
 
+            result = json.loads(match.group())
+
+            # Try parsing compliance time
+            compliance_text = result.get("compliance", "")
+            days = parse_compliance_days(compliance_text)
+            result["compliance_time_days"] = days
+
+            # Optional: Check compliance if reference date is given
+            if inspection_date and days:
+                deadline = inspection_date + timedelta(days=days)
+                result["is_compliant"] = datetime.today().date() <= deadline.date()
+            else:
+                result["is_compliant"] = None
+
+            return result
+
         except Exception as e:
-            print(f"⚠️ GPT call failed on attempt {attempt+1}: {e}")
+            print(f"⚠️ GPT call failed (attempt {attempt + 1}): {e}")
             time.sleep((2 ** attempt) + 1)
 
     return {"error": "Failed to summarize after retries."}
