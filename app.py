@@ -8,35 +8,37 @@ from datetime import datetime
 st.set_page_config(page_title="Service Bulletin Previewer", layout="wide")
 init_db()
 
-st.title("📄 Aircraft Service Bulletin Reader (with Compliance Check)")
+st.title("📄 Aircraft Service Bulletin Reader (with Compliance Checker)")
 
 uploaded_files = st.file_uploader("Upload Service Bulletins (PDF)", type="pdf", accept_multiple_files=True)
 
-inspection_date = st.date_input("Enter aircraft inspection or delivery date for compliance check")
-
 if uploaded_files:
-    for uploaded_file in uploaded_files:
-        with st.spinner(f"Processing {uploaded_file.name}..."):
-            full_text = extract_text_from_pdf(uploaded_file)
-            result = summarize_with_ai(full_text, inspection_date)
+    aircraft_number = st.text_input("Enter your aircraft number (e.g. 12345)")
+    delivery_date = st.date_input("Enter your aircraft's inspection/delivery date")
 
-            if "error" in result:
-                st.error("❌ GPT failed to summarize. Details: " + result["error"])
-                summary = full_text[:3000] + "..."
-                aircraft = ata = system = action = compliance = compliance_status = "N/A"
-            else:
-                summary = str(result)
-                aircraft = ", ".join(result.get("aircraft", []))
-                ata = result.get("ata", "")
-                system = result.get("system", "")
-                action = result.get("action", "")
-                compliance = result.get("compliance", "")
-                compliance_status = result.get("compliance_status", "Unknown")
+    if aircraft_number and delivery_date:
+        for uploaded_file in uploaded_files:
+            with st.spinner(f"Processing {uploaded_file.name}..."):
+                full_text = extract_text_from_pdf(uploaded_file)
+                result = summarize_with_ai(full_text, str(delivery_date), aircraft_number)
 
-            save_to_db(uploaded_file.name, summary, aircraft, ata, system, action, compliance)
+                if "error" in result:
+                    st.error("❌ GPT failed to summarize. Details: " + result["error"])
+                    summary = full_text[:3000] + "..."
+                    aircraft = ata = system = action = compliance = compliance_status = group = "N/A"
+                else:
+                    summary = result.get("raw_summary", str(result))
+                    aircraft = ", ".join(result.get("aircraft", []))
+                    ata = result.get("ata", "")
+                    system = result.get("system", "")
+                    action = result.get("action", "")
+                    compliance = result.get("compliance", "")
+                    compliance_status = result.get("compliance_status", "Unknown")
+                    group = result.get("group", "Unknown")
 
-            st.success(f"✅ {uploaded_file.name} processed and saved!")
-            st.markdown(f"**Compliance Check**: {compliance_status}")
+                save_to_db(uploaded_file.name, summary, aircraft, ata, system, action, compliance)
+                st.success(f"{uploaded_file.name} processed and saved!")
+                st.info(f"✈️ Aircraft Group: {group}\n📅 Compliance: {compliance}\n🕒 Status: {compliance_status}")
 
 st.divider()
 st.subheader("🔍 View Uploaded Bulletins")
