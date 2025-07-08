@@ -17,7 +17,18 @@ if uploaded_files:
     for uploaded_file in uploaded_files:
         with st.spinner(f"Processing {uploaded_file.name}..."):
             full_text = extract_text_from_pdf(uploaded_file)
-            summary = summarize_with_ai(full_text)
+            result = summarize_with_ai(full_text)
+
+# Populate fields
+aircraft = ", ".join(result.get("aircraft", []))
+ata = result.get("ata", "")
+system = result.get("system", "")
+action = result.get("action", "")
+compliance = result.get("compliance", "")
+reason = result.get("reason", "")
+sb_id = result.get("sb_id", "")
+summary = str(result)
+
 
             # Try to extract basic fields from AI summary
             def extract_field(pattern):
