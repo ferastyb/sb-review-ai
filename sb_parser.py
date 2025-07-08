@@ -53,7 +53,14 @@ Bulletin content:
                 temperature=0.2
             )
             content = response.choices[0].message.content
-            json_data = eval(content) if content.strip().startswith("{") else {}
+            import json
+
+try:
+    json_data = json.loads(content)
+except json.JSONDecodeError:
+    print("❌ Failed to parse GPT response as JSON.")
+    json_data = {}
+
             return json_data
 
         except Exception as e:
