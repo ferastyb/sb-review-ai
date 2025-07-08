@@ -56,18 +56,17 @@ Bulletin:
             )
 
             content = response.choices[0].message.content
-            print("🧠 GPT Response:", content)
+            print("🧠 GPT raw response:", content)
 
             try:
                 json_data = json.loads(content)
+                return json_data
             except json.JSONDecodeError:
-                print("❌ Failed to parse GPT response as JSON.")
-                json_data = {}
-
-            return json_data
+                print("❌ Failed to parse GPT response. Returning empty dictionary.")
+                return {"error": "Invalid JSON from GPT"}
 
         except Exception as e:
-            print(f"⚠️ GPT request failed: {e}")
+            print(f"⚠️ GPT request error: {e}")
             time.sleep((2 ** attempt) + 1)
 
     return {"error": "Failed to summarize after retries."}
