@@ -30,7 +30,7 @@ def slice_sections(text):
             continue
     return sections
 
-# Use GPT to extract structured info, compliance group, and compliance status
+# Use GPT-4 to extract structured info, compliance group, and compliance status
 def summarize_with_ai(text, delivery_date=None, aircraft_number=None, max_retries=3):
     sections = slice_sections(text)
     cleaned_text = "\n\n".join(sections.values()) if sections else text
@@ -70,7 +70,7 @@ Text to process:
     for attempt in range(max_retries):
         try:
             response = client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model="gpt-4",  # ✅ switched to GPT-4
                 messages=[
                     {"role": "system", "content": "You are a structured SB extraction engine."},
                     {"role": "user", "content": prompt}
@@ -80,15 +80,12 @@ Text to process:
 
             content = response.choices[0].message.content.strip()
 
-            # Debugging print
             print("🧠 GPT Response (raw):")
             print(content)
 
-            # Try parsing full response
             try:
                 return json.loads(content)
             except json.JSONDecodeError:
-                # Try extracting a JSON block from the response
                 match = re.search(r"\{[\s\S]*\}", content)
                 if match:
                     try:
