@@ -31,7 +31,7 @@ summary = str(result)
 
 
             # Try to extract basic fields from AI summary
-            def extract_field(pattern):
+ def extract_field(pattern):
                 match = re.search(f"{pattern}:(.*)", summary, re.IGNORECASE)
                 return match.group(1).strip() if match else ""
 
