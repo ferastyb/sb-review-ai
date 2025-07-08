@@ -13,7 +13,7 @@ st.title("📄 Aircraft Service Bulletin Reader (with Compliance Checker)")
 uploaded_files = st.file_uploader("Upload Service Bulletins (PDF)", type="pdf", accept_multiple_files=True)
 
 if uploaded_files:
-    aircraft_number = st.text_input("Enter your aircraft number (e.g. 12345)")
+    aircraft_number = st.text_input("Enter your aircraft variable number (e.g. ZA839)")
     delivery_date = st.date_input("Enter your aircraft's inspection/delivery date")
 
     if aircraft_number and delivery_date:
