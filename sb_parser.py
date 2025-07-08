@@ -1,78 +1,66 @@
+import os
 import pdfplumber
 import re
-import os
 import time
+import json
 from openai import OpenAI
+from openai import OpenAIError
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def extract_text_from_pdf(pdf_file):
     with pdfplumber.open(pdf_file) as pdf:
-        return "\n".join(page.extract_text() or "" for page in pdf.pages)
+        text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+    return text
 
-def slice_sections(text):
-    section_patterns = {
-        "effectivity": r"(Effectivity|Applicability)",
-        "reason": r"(Reason|Background|Purpose)",
-        "compliance": r"(Compliance|Compliance Recommendation)",
-        "accomplishment": r"(Accomplishment Instructions|Instructions|Implementation)",
-        "description": r"(Description|Summary)"
-    }
+def extract_json(text):
+    try:
+        text = text.strip("` \n")
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+        return json.loads(match.group()) if match else None
+    except Exception as e:
+        print("❌ JSON parsing failed:", e)
+        return None
 
-    found_sections = {}
-    for section, pattern in section_patterns.items():
-        match = re.search(f"{pattern}.*?(?=\n[A-Z][^\n]{0,100}\n|$)", text, re.IGNORECASE | re.DOTALL)
-        if match:
-            found_sections[section] = match.group().strip()
-
-    print(f"📑 Sections extracted: {list(found_sections.keys())}")
-    return found_sections
-
-def summarize_with_ai(full_text):
-    sections = slice_sections(full_text)
-
-    if not sections:
-        return {"error": "No recognizable sections found in the SB."}
-
+def summarize_with_ai(text, max_retries=3):
     prompt = (
-        "You are an aircraft technical documentation assistant. Extract the following fields from the provided SB text:\n"
-        "- aircraft model\n"
-        "- ATA chapter\n"
-        "- affected system or parts\n"
-        "- type of action (e.g., inspection, replacement)\n"
-        "- compliance recommendation\n"
-        "- reason for the bulletin\n"
-        "- service bulletin ID (if mentioned)\n\n"
-        "Return your answer as JSON.\n\n"
-        "### SERVICE BULLETIN TEXT ###\n"
+        "You are an AI assistant. Summarize the following aircraft service bulletin text into structured JSON.\n"
+        "Extract these fields:\n"
+        "- aircraft: list of affected aircraft models\n"
+        "- ata: ATA chapter\n"
+        "- system: system or part affected\n"
+        "- action: type of action required (e.g. inspection, replacement)\n"
+        "- compliance: compliance time or recommendation\n"
+        "- reason: reason for the bulletin (optional)\n"
+        "- sb_id: bulletin ID or number (optional)\n"
+        "Return only valid JSON. Do not include any explanation or markdown.\n\n"
+        f"Text: \n{text}"
     )
 
-    for title, content in sections.items():
-        prompt += f"\n## {title.upper()}\n{content}\n"
-
-    for attempt in range(2):
+    for attempt in range(max_retries):
         try:
+            print(f"⏳ GPT call attempt {attempt + 1}")
             response = client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model="gpt-4",
                 messages=[
-                    {"role": "system", "content": "You are a structured SB extraction engine."},
+                    {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.2
+                temperature=0.3
             )
-            content = response.choices[0].message.content.strip()
+            content = response.choices[0].message.content
             print("🧠 GPT Response (raw):")
             print(content)
 
-            match = re.search(r"\{.*\}", content, re.DOTALL)
-            if not match:
-                raise ValueError("No JSON object found in response.")
+            result = extract_json(content)
+            if result:
+                return result
 
-            import json
-            return json.loads(match.group())
-
+        except OpenAIError as e:
+            print("❌ OpenAI API Error:", e)
         except Exception as e:
-            print(f"⚠️ Attempt {attempt + 1} failed:", e)
-            time.sleep(1)
+            print("❌ General Error:", e)
+
+        time.sleep(2)  # wait before retry
 
     return {"error": "Failed to summarize after retries."}
