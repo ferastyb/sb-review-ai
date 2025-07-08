@@ -1,7 +1,7 @@
 import streamlit as st
 import os
 import pandas as pd
-from sb_parser import extract_text_from_pdf
+from sb_parser import extract_text_from_pdf, summarize_with_ai
 from sb_database import init_db, save_to_db, fetch_all_bulletins
 
 st.set_page_config(page_title="Service Bulletin Previewer", layout="wide")
