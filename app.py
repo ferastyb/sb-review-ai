@@ -14,15 +14,20 @@ uploaded_files = st.file_uploader("Upload Service Bulletins (PDF)", type="pdf", 
 if uploaded_files:
     for uploaded_file in uploaded_files:
         with st.spinner(f"Extracting text from {uploaded_file.name}..."):
-            full_text = extract_text_from_pdf(uploaded_file)
+           from sb_parser import summarize_with_ai  # make sure this line is at the top
 
-            # Use dummy metadata (you can improve this later)
-            aircraft = "Unknown"
-            ata = "Unknown"
-            system = "Unknown"
-            action = "Read-only"
-            compliance = "Not extracted"
-            summary = full_text[:3000] + "..." if len(full_text) > 3000 else full_text
+full_text = extract_text_from_pdf(uploaded_file)
+result = summarize_with_ai(full_text)
+
+aircraft = ", ".join(result.get("aircraft", []))
+ata = result.get("ata", "")
+system = result.get("system", "")
+action = result.get("action", "")
+compliance = result.get("compliance", "")
+reason = result.get("reason", "")
+sb_id = result.get("sb_id", "")
+summary = str(result)
+
 
             save_to_db(uploaded_file.name, summary, aircraft, ata, system, action, compliance)
             st.success(f"{uploaded_file.name} text extracted and saved!")
