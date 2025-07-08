@@ -50,4 +50,5 @@ st.dataframe(df[["File", "Aircraft", "ATA", "System", "Action", "Compliance"]])
 if st.checkbox("Show Full Summaries"):
     for i, row in df.iterrows():
         st.markdown(f"### 📄 {row['File']}")
-        st.text_area("Summary", row["Summary"], height=200)
+        st.text_area("Summary", row["Summary"], height=200, key=f"summary_{i}")
+
