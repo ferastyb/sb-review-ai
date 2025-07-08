@@ -2,6 +2,7 @@ import pdfplumber
 from openai import OpenAI
 import os
 import time
+import json
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -26,19 +27,20 @@ def summarize_with_ai(text, max_retries=3):
     cleaned_text = "\n\n".join(sections.values())
 
     prompt = f"""
-You are an AI assistant helping aircraft technical services engineers extract service bulletin details.
+Extract the following fields from this aircraft service bulletin.
+Return ONLY valid JSON in this format:
 
-Please return the following fields in JSON format:
+{{
+  "aircraft": [],
+  "ata": "",
+  "system": "",
+  "action": "",
+  "compliance": "",
+  "reason": "",
+  "sb_id": ""
+}}
 
-- "aircraft": list of models affected
-- "ata": ATA chapter number
-- "system": affected system or part
-- "action": short description of the required action (e.g. inspect, modify, power cycle)
-- "compliance": deadline or compliance condition
-- "reason": why the SB was issued (safety, reliability, etc.)
-- "sb_id": service bulletin reference if available
-
-Bulletin content:
+Bulletin:
 {cleaned_text}
 """
 
@@ -52,18 +54,20 @@ Bulletin content:
                 ],
                 temperature=0.2
             )
-            content = response.choices[0].message.content
-            import json
 
-try:
-    json_data = json.loads(content)
-except json.JSONDecodeError:
-    print("❌ Failed to parse GPT response as JSON.")
-    json_data = {}
+            content = response.choices[0].message.content
+            print("🧠 GPT Response:", content)
+
+            try:
+                json_data = json.loads(content)
+            except json.JSONDecodeError:
+                print("❌ Failed to parse GPT response as JSON.")
+                json_data = {}
 
             return json_data
 
         except Exception as e:
+            print(f"⚠️ GPT request failed: {e}")
             time.sleep((2 ** attempt) + 1)
 
     return {"error": "Failed to summarize after retries."}
