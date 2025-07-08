@@ -1,62 +1,56 @@
 import pdfplumber
-from openai import OpenAI
+import re
 import os
 import time
-import json
-import re
+from openai import OpenAI
 
-# Load API key from environment variable
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Extract text from all pages in PDF
 def extract_text_from_pdf(pdf_file):
     with pdfplumber.open(pdf_file) as pdf:
-        return "\n".join(page.extract_text() for page in pdf.pages if page.extract_text())
+        return "\n".join(page.extract_text() or "" for page in pdf.pages)
 
-# Try to extract relevant sections from the PDF text
 def slice_sections(text):
-    labels = [
-        "Effectivity", "Applicability", "Affected Aircraft",
-        "Reason", "Background", "Description",
-        "Compliance", "Action", "Accomplishment Instructions"
-    ]
-    sections = {}
-    for i, label in enumerate(labels):
-        try:
-            start = text.index(label)
-            end = text.index(labels[i + 1]) if i + 1 < len(labels) else len(text)
-            sections[label] = text[start:end]
-        except ValueError:
-            continue
-    return sections
+    section_patterns = {
+        "effectivity": r"(Effectivity|Applicability)",
+        "reason": r"(Reason|Background|Purpose)",
+        "compliance": r"(Compliance|Compliance Recommendation)",
+        "accomplishment": r"(Accomplishment Instructions|Instructions|Implementation)",
+        "description": r"(Description|Summary)"
+    }
 
-# Use GPT to summarize extracted SB text into structured JSON
-def summarize_with_ai(text, max_retries=3):
-    sections = slice_sections(text)
-    cleaned_text = "\n\n".join(sections.values()) if sections else text
+    found_sections = {}
+    for section, pattern in section_patterns.items():
+        match = re.search(f"{pattern}.*?(?=\n[A-Z][^\n]{0,100}\n|$)", text, re.IGNORECASE | re.DOTALL)
+        if match:
+            found_sections[section] = match.group().strip()
 
-    prompt = f"""
-You are an AI assistant helping extract structured information from aircraft service bulletins.
+    print(f"📑 Sections extracted: {list(found_sections.keys())}")
+    return found_sections
 
-Your task is to return only valid JSON (no explanation or commentary). Use this format exactly:
+def summarize_with_ai(full_text):
+    sections = slice_sections(full_text)
 
-{{
-  "aircraft": ["model1", "model2"],
-  "ata": "ATA chapter number",
-  "system": "Affected system or part",
-  "action": "Brief action (e.g. modify, inspect, power cycle)",
-  "compliance": "Compliance recommendation or deadline",
-  "reason": "Why this bulletin is issued (e.g. safety, data update)",
-  "sb_id": "Service Bulletin number"
-}}
+    if not sections:
+        return {"error": "No recognizable sections found in the SB."}
 
-Text to process:
-\"\"\"
-{cleaned_text}
-\"\"\"
-"""
+    prompt = (
+        "You are an aircraft technical documentation assistant. Extract the following fields from the provided SB text:\n"
+        "- aircraft model\n"
+        "- ATA chapter\n"
+        "- affected system or parts\n"
+        "- type of action (e.g., inspection, replacement)\n"
+        "- compliance recommendation\n"
+        "- reason for the bulletin\n"
+        "- service bulletin ID (if mentioned)\n\n"
+        "Return your answer as JSON.\n\n"
+        "### SERVICE BULLETIN TEXT ###\n"
+    )
 
-    for attempt in range(max_retries):
+    for title, content in sections.items():
+        prompt += f"\n## {title.upper()}\n{content}\n"
+
+    for attempt in range(2):
         try:
             response = client.chat.completions.create(
                 model="gpt-3.5-turbo",
@@ -66,28 +60,19 @@ Text to process:
                 ],
                 temperature=0.2
             )
-
             content = response.choices[0].message.content.strip()
-
-            # 🔍 DEBUG: Show what GPT returned
             print("🧠 GPT Response (raw):")
             print(content)
 
-            # Try parsing the full response as JSON
-            try:
-                return json.loads(content)
-            except json.JSONDecodeError:
-                # Try to extract JSON block from a noisy response
-                match = re.search(r"\{[\s\S]*\}", content)
-                if match:
-                    try:
-                        return json.loads(match.group())
-                    except json.JSONDecodeError:
-                        return {"error": "Still invalid after cleanup"}
-                return {"error": "Invalid JSON from GPT"}
+            match = re.search(r"\{.*\}", content, re.DOTALL)
+            if not match:
+                raise ValueError("No JSON object found in response.")
+
+            import json
+            return json.loads(match.group())
 
         except Exception as e:
-            print(f"⚠️ GPT call failed on attempt {attempt+1}: {e}")
-            time.sleep((2 ** attempt) + 1)
+            print(f"⚠️ Attempt {attempt + 1} failed:", e)
+            time.sleep(1)
 
     return {"error": "Failed to summarize after retries."}
