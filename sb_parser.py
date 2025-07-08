@@ -1,6 +1,13 @@
-import openai
+import pdfplumber
+from openai import OpenAI
+import os
 import time
-import re
+
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+def extract_text_from_pdf(pdf_file):
+    with pdfplumber.open(pdf_file) as pdf:
+        return "\n".join(page.extract_text() for page in pdf.pages if page.extract_text())
 
 def slice_sections(text):
     labels = ["Effectivity", "Reason", "Description", "Compliance", "Accomplishment Instructions"]
@@ -47,4 +54,9 @@ Bulletin content:
             )
             content = response.choices[0].message.content
             json_data = eval(content) if content.strip().startswith("{") else {}
-            return jso
+            return json_data
+
+        except Exception as e:
+            time.sleep((2 ** attempt) + 1)
+
+    return {"error": "Failed to summarize after retries."}
