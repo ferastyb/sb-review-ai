@@ -2,55 +2,70 @@ import requests
 from bs4 import BeautifulSoup
 import re
 
+FEDERAL_REGISTER_SEARCH = "https://www.federalregister.gov/documents/search"
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (compatible; SBReviewAI/1.0)"
+}
+
+def extract_effective_date(text):
+    match = re.search(r"Effective Date[:\s]+([A-Za-z]+ \d{1,2}, \d{4})", text)
+    if match:
+        return match.group(1)
+    return None
+
 def find_relevant_ad(sb_id, ata, system):
-    query = f"Boeing SB {sb_id} site:federalregister.gov"
-    headers = {"User-Agent": "Mozilla/5.0"}
     try:
-        # Search for related AD on Google (via DuckDuckGo proxy)
-        search_url = f"https://html.duckduckgo.com/html/?q={query}"
-        res = requests.get(search_url, headers=headers, timeout=10)
-        soup = BeautifulSoup(res.text, "html.parser")
+        # Build combined query
+        query = f"{sb_id} OR {sb_id.split('-')[-1]} OR ATA {ata} {system}"
 
-        links = soup.find_all("a", href=True)
-        ad_link = None
-        for link in links:
-            href = link["href"]
-            if "federalregister.gov/documents" in href and "/airworthiness-directives" in href:
-                ad_link = href
-                break
-
-        if not ad_link:
-            # Retry with ATA/system if SB ID search failed
-            alt_query = f"Boeing ATA {ata} {system} Airworthiness Directive site:federalregister.gov"
-            search_url = f"https://html.duckduckgo.com/html/?q={alt_query}"
-            res = requests.get(search_url, headers=headers, timeout=10)
-            soup = BeautifulSoup(res.text, "html.parser")
-            links = soup.find_all("a", href=True)
-            for link in links:
-                href = link["href"]
-                if "federalregister.gov/documents" in href and "/airworthiness-directives" in href:
-                    ad_link = href
-                    break
-
-        if not ad_link:
-            return {"ad_number": "Not found", "effective_date": "N/A"}
-
-        # Open the AD page and extract title + effective date
-        ad_res = requests.get(ad_link, headers=headers, timeout=10)
-        ad_soup = BeautifulSoup(ad_res.text, "html.parser")
-
-        title_tag = ad_soup.find("h1")
-        ad_number = title_tag.text.strip() if title_tag else "Unknown AD"
-
-        date_text = ad_res.text
-        match = re.search(r"Effective\s+date\s*:?\s*(\w+ \d{1,2}, \d{4})", date_text, re.IGNORECASE)
-        effective_date = match.group(1) if match else "N/A"
-
-        return {
-            "ad_number": ad_number,
-            "effective_date": effective_date
+        params = {
+            "conditions[term]": query,
+            "conditions[agency_ids][]": "27",  # FAA
+            "order": "newest",
+            "per_page": 5
         }
 
+        response = requests.get(FEDERAL_REGISTER_SEARCH, params=params, headers=HEADERS, timeout=10)
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, "html.parser")
+        results = soup.select(".document-wrapper")
+
+        for result in results:
+            title_elem = result.select_one(".document-title")
+            url_elem = result.select_one(".document-title a")
+
+            if not title_elem or not url_elem:
+                continue
+
+            title = title_elem.get_text(strip=True)
+            url = "https://www.federalregister.gov" + url_elem.get("href")
+
+            # Basic match check
+            if any(part in title for part in [sb_id, sb_id.split('-')[-1], ata, system]):
+                ad_number_match = re.search(r"\b(AD\s*\d{4}-\d{2}-\d{2})\b", title)
+                ad_number = ad_number_match.group(1) if ad_number_match else "Unknown"
+
+                # Load detail page to extract effective date
+                detail_page = requests.get(url, headers=HEADERS, timeout=10)
+                detail_soup = BeautifulSoup(detail_page.text, "html.parser")
+                full_text = detail_soup.get_text()
+                effective_date = extract_effective_date(full_text) or "N/A"
+
+                return {
+                    "title": title,
+                    "url": url,
+                    "ad_number": ad_number,
+                    "effective_date": effective_date
+                }
+
     except Exception as e:
-        print(f"🌐 AD lookup failed: {e}")
-        return {"ad_number": "Lookup failed", "effective_date": "N/A"}
+        print(f"⚠️ AD search error: {e}")
+
+    return {
+        "title": "Not found",
+        "url": "",
+        "ad_number": "Not found",
+        "effective_date": "N/A"
+    }
