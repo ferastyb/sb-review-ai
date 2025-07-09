@@ -1,27 +1,30 @@
-# web_search.py
 import requests
 from bs4 import BeautifulSoup
 
-def find_relevant_ad(sb_summary):
+def find_relevant_ad(sb_id, reason):
     """
-    Perform a basic web search to suggest a relevant Airworthiness Directive (AD)
-    based on SB summary text. Returns the first matching URL or 'Not found'.
+    Searches DuckDuckGo for relevant airworthiness directives based on the SB ID and reason.
+    Returns the title and URL of the top result.
     """
     try:
-        query = f"site:drs.faa.gov Airworthiness Directive {sb_summary}"
-        url = f"https://www.google.com/search?q={query}"
-        headers = {"User-Agent": "Mozilla/5.0"}
+        # Construct the query using both the Service Bulletin ID and reason
+        query = f"{sb_id} {reason} site:regulations.gov OR site:ecfr.gov"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (compatible; ServiceBulletinAI/1.0)"
+        }
 
-        response = requests.get(url, headers=headers, timeout=5)
+        # Perform the search using DuckDuckGo HTML interface
+        response = requests.get(f"https://html.duckduckgo.com/html/?q={query}", headers=headers)
         soup = BeautifulSoup(response.text, "html.parser")
 
-        # Attempt to get the first link from the search results
-        for a in soup.find_all("a", href=True):
-            href = a["href"]
-            if href.startswith("http") and "drs.faa.gov" in href:
-                return href
+        # Extract the first result
+        result = soup.find("a", class_="result__a")
+        if result and result['href']:
+            title = result.get_text()
+            url = result["href"]
+            return f"{title}\n{url}"
+        else:
+            return "No relevant AD found."
 
-        return "Not found"
     except Exception as e:
-        print("Search error:", e)
-        return "Not found"
+        return f"Error while searching for AD: {e}"
