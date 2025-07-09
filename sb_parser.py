@@ -6,12 +6,15 @@ import json
 import re
 from datetime import date
 
+# Load API key from environment variable
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+# Extract text from PDF
 def extract_text_from_pdf(pdf_file):
     with pdfplumber.open(pdf_file) as pdf:
         return "\n".join(page.extract_text() for page in pdf.pages if page.extract_text())
 
+# Slice known sections
 def slice_sections(text):
     labels = [
         "Effectivity", "Applicability", "Affected Aircraft",
@@ -28,6 +31,7 @@ def slice_sections(text):
             continue
     return sections
 
+# Summarize SB using GPT
 def summarize_with_ai(text, delivery_date=None, aircraft_number=None, max_retries=3):
     sections = slice_sections(text)
     cleaned_text = "\n\n".join(sections.values()) if sections else text
@@ -35,16 +39,17 @@ def summarize_with_ai(text, delivery_date=None, aircraft_number=None, max_retrie
     prompt = f"""
 You are an AI assistant that extracts structured information from aircraft service bulletins.
 
-You must return only valid JSON (no commentary). Use the following format exactly:
+Return only **valid JSON** using the exact format below:
+
 {{
   "aircraft": ["model1", "model2"],
   "ata": "ATA chapter number",
   "system": "Affected system or part",
   "action": "Brief action (e.g. modify, inspect, power cycle)",
-  "compliance": "Compliance recommendation or deadline",
-  "reason": "Why this bulletin is issued (e.g. safety, data update)",
+  "compliance": "Compliance deadline or instructions",
+  "reason": "Why this bulletin is issued",
   "sb_id": "Service Bulletin number",
-  "group": "Aircraft group if mentioned (e.g. Group 1, Group 2)",
+  "group": "Group number if specified (e.g. Group 1)",
   "is_compliant": true or false
 }}
 
@@ -55,13 +60,13 @@ Context:
 
 You must:
 - Identify the aircraft group based on number ranges if present.
-- Extract and interpret compliance deadline.
-- Set `is_compliant` based on whether this aircraft meets the deadline.
+- Extract and interpret compliance instructions.
+- Set `is_compliant` based on whether this aircraft meets the compliance requirement.
 
-Text to process:
-"""
+Bulletin Text:
+\"\"\"
 {cleaned_text}
-"""
+\"\"\"
 """
 
     for attempt in range(max_retries):
@@ -74,12 +79,24 @@ Text to process:
                 ],
                 temperature=0.2
             )
+
             content = response.choices[0].message.content.strip()
-            match = re.search(r"\{[\s\S]*\}", content)
-            if match:
-                return json.loads(match.group())
-            return {"error": "Invalid JSON from GPT"}
+
+            # Try parsing full response
+            try:
+                return json.loads(content)
+            except json.JSONDecodeError:
+                # Try extracting a JSON block from the response
+                match = re.search(r"\{[\s\S]*\}", content)
+                if match:
+                    try:
+                        return json.loads(match.group())
+                    except json.JSONDecodeError:
+                        return {"error": "Still invalid after cleanup"}
+                return {"error": "Invalid JSON from GPT"}
+
         except Exception as e:
+            print(f"⚠️ GPT call failed on attempt {attempt+1}: {e}")
             time.sleep((2 ** attempt) + 1)
 
     return {"error": "Failed to summarize after retries."}
