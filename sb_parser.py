@@ -30,7 +30,7 @@ def slice_sections(text):
             continue
     return sections
 
-# Use GPT to extract structured info, compliance group, and compliance status
+# Use GPT-4 to extract structured info, compliance group, and status
 def summarize_with_ai(text, delivery_date=None, aircraft_number=None, max_retries=3):
     sections = slice_sections(text)
     cleaned_text = "\n\n".join(sections.values()) if sections else text
@@ -55,18 +55,17 @@ You must return only valid JSON (no commentary). Use the following format exactl
 Context:
 - Aircraft Number: {aircraft_number}
 - Delivery or Inspection Date: {delivery_date}
+- Today’s Date: {date.today()}
 
 You must:
-- Identify which group the aircraft number likely belongs to (if groups are listed).
-- Extract and interpret compliance deadline (calendar days, flight cycles, or delivery cutoffs).
-- Set `is_compliant` based on whether this aircraft meets the compliance time as of today.
-
-Important: Respond ONLY with valid JSON. Do not add explanations or markdown.
+- Identify the aircraft group based on number ranges if present.
+- Extract and interpret compliance timelines.
+- Set `is_compliant` based on whether the aircraft meets the timeline using real date math.
 
 Text to process:
-"""
+\"\"\"
 {cleaned_text}
-"""
+\"\"\"
 """
 
     for attempt in range(max_retries):
@@ -82,20 +81,23 @@ Text to process:
 
             content = response.choices[0].message.content.strip()
 
-            print("\U0001F9E0 GPT Response (raw):")
+            # Debugging print
+            print("🧠 GPT Response (raw):")
             print(content)
 
-            # Extract valid JSON block using balanced braces
-            match = re.search(r"\{(?:[^{}]|(?R))*\}", content)
-            if match:
-                try:
-                    return json.loads(match.group())
-                except json.JSONDecodeError:
-                    return {"error": "Still invalid after cleanup"}
-            return {"error": "Invalid JSON from GPT"}
+            try:
+                return json.loads(content)
+            except json.JSONDecodeError:
+                match = re.search(r"\{[\s\S]*\}", content)
+                if match:
+                    try:
+                        return json.loads(match.group())
+                    except json.JSONDecodeError:
+                        return {"error": "Still invalid after cleanup"}
+                return {"error": "Invalid JSON from GPT"}
 
         except Exception as e:
-            print(f"\u26a0\ufe0f GPT call failed on attempt {attempt+1}: {e}")
+            print(f"⚠️ GPT call failed on attempt {attempt + 1}: {e}")
             time.sleep((2 ** attempt) + 1)
 
     return {"error": "Failed to summarize after retries."}
