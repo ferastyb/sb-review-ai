@@ -4,6 +4,7 @@ import os
 import time
 import json
 import re
+from datetime import date
 
 # Load API key from environment variable
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
