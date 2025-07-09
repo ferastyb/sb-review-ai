@@ -2,49 +2,37 @@ import requests
 from bs4 import BeautifulSoup
 import re
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                  "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-}
+def find_relevant_ad(sb_id: str, ata: str, system: str) -> dict:
+    """
+    Search online for a related Airworthiness Directive (AD) based on the SB ID, ATA, and system.
+    Returns a dict with the AD title and link, or a 'not found' message.
+    """
+    query = f"{sb_id} site:federalregister.gov OR site:faa.gov"
+    search_url = f"https://html.duckduckgo.com/html/?q={query}"
 
-def search_google(query):
-    url = f"https://www.google.com/search?q={requests.utils.quote(query)}"
-    response = requests.get(url, headers=HEADERS)
-    if response.status_code != 200:
-        return []
+    try:
+        response = requests.get(search_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+        soup = BeautifulSoup(response.text, "html.parser")
 
-    soup = BeautifulSoup(response.text, "html.parser")
-    results = []
+        links = soup.select(".result__a")
+        for link in links:
+            url = link.get("href")
+            title = link.text
 
-    for g in soup.select("div.g"):
-        title_elem = g.find("h3")
-        link_elem = g.find("a")
-        if title_elem and link_elem:
-            title = title_elem.text.strip()
-            href = link_elem["href"]
-            results.append({"title": title, "link": href})
+            # Fetch page content to look for better matches
+            page = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+            page_text = page.text
 
-    return results
+            # Search for AD number pattern or SB match in the content
+            if re.search(rf"{sb_id}|{ata}|{system}", page_text, re.IGNORECASE):
+                ad_match = re.search(r"AD\s+\d{4}-\d{2}-\d{2}", page_text)
+                ad_number = ad_match.group(0) if ad_match else "Unknown AD"
 
-def find_relevant_ad(sb_id, ata=None, system=None):
-    query_variants = [
-        f"Boeing SB {sb_id} AD site:federalregister.gov",
-        f"Airworthiness Directive {sb_id} site:faa.gov",
-    ]
+                return {
+                    "title": ad_number + " - " + title.strip(),
+                    "link": url
+                }
 
-    if ata:
-        query_variants.append(f"ATA {ata} Boeing AD site:federalregister.gov")
-
-    if system:
-        query_variants.append(f"Boeing {system} AD site:federalregister.gov")
-
-    for query in query_variants:
-        print(f"🔍 Searching: {query}")
-        results = search_google(query)
-        for result in results:
-            title = result["title"].lower()
-            if "airworthiness directive" in title or "ad" in title:
-                if sb_id.lower() in title or (ata and ata in title) or (system and system.lower() in title):
-                    return result
-
-    return {"title": "No relevant AD found", "link": ""}
+        return {"title": "No relevant AD found", "link": ""}
+    except Exception as e:
+        return {"title": f"Search error: {e}", "link": ""}
