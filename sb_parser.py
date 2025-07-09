@@ -30,7 +30,7 @@ def slice_sections(text):
             continue
     return sections
 
-# Use GPT-4 to extract structured info, compliance group, and compliance status
+# Use GPT to extract structured info, compliance group, and compliance status
 def summarize_with_ai(text, delivery_date=None, aircraft_number=None, max_retries=3):
     sections = slice_sections(text)
     cleaned_text = "\n\n".join(sections.values()) if sections else text
@@ -61,16 +61,18 @@ You must:
 - Extract and interpret compliance deadline (calendar days, flight cycles, or delivery cutoffs).
 - Set `is_compliant` based on whether this aircraft meets the compliance time as of today.
 
+Important: Respond ONLY with valid JSON. Do not add explanations or markdown.
+
 Text to process:
-\"\"\"
+"""
 {cleaned_text}
-\"\"\"
+"""
 """
 
     for attempt in range(max_retries):
         try:
             response = client.chat.completions.create(
-                model="gpt-4",  # ✅ switched to GPT-4
+                model="gpt-4",
                 messages=[
                     {"role": "system", "content": "You are a structured SB extraction engine."},
                     {"role": "user", "content": prompt}
@@ -80,22 +82,20 @@ Text to process:
 
             content = response.choices[0].message.content.strip()
 
-            print("🧠 GPT Response (raw):")
+            print("\U0001F9E0 GPT Response (raw):")
             print(content)
 
-            try:
-                return json.loads(content)
-            except json.JSONDecodeError:
-                match = re.search(r"\{[\s\S]*\}", content)
-                if match:
-                    try:
-                        return json.loads(match.group())
-                    except json.JSONDecodeError:
-                        return {"error": "Still invalid after cleanup"}
-                return {"error": "Invalid JSON from GPT"}
+            # Extract valid JSON block using balanced braces
+            match = re.search(r"\{(?:[^{}]|(?R))*\}", content)
+            if match:
+                try:
+                    return json.loads(match.group())
+                except json.JSONDecodeError:
+                    return {"error": "Still invalid after cleanup"}
+            return {"error": "Invalid JSON from GPT"}
 
         except Exception as e:
-            print(f"⚠️ GPT call failed on attempt {attempt+1}: {e}")
+            print(f"\u26a0\ufe0f GPT call failed on attempt {attempt+1}: {e}")
             time.sleep((2 ** attempt) + 1)
 
     return {"error": "Failed to summarize after retries."}
