@@ -60,7 +60,7 @@ st.divider()
 
 st.subheader("🔍 View Uploaded Bulletins")
 
-df = pd.DataFrame(fetch_all_bulletins(), columns=["ID", "File", "Summary", "Aircraft", "ATA", "System", "Action", "Compliance"])
+df = pd.DataFrame(fetch_all_bulletins(), columns=["ID", "File", "Summary", "Aircraft", "ATA", "System", "Action", "Compliance", "AD"])
 
 col1, col2 = st.columns(2)
 with col1:
