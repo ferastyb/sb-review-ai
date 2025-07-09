@@ -1,16 +1,13 @@
 import sqlite3
-import os
 
-DB_PATH = "bulletins.db"
-
+# Initialize the database and create the table if it doesn't exist
 def init_db():
-    # If DB doesn't exist or table missing, create it
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect("bulletins.db")
     c = conn.cursor()
     c.execute('''
         CREATE TABLE IF NOT EXISTS bulletins (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            file TEXT,
+            file_name TEXT,
             summary TEXT,
             aircraft TEXT,
             ata TEXT,
@@ -27,27 +24,28 @@ def init_db():
     conn.commit()
     conn.close()
 
-def save_to_db(file, summary, aircraft, ata, system, action,
-               compliance, reason, sb_id, group_id, is_compliant, ad_suggestion):
-    conn = sqlite3.connect(DB_PATH)
+# Save a new bulletin to the database
+def save_to_db(file_name, summary, aircraft, ata, system, action,
+               compliance, reason, sb_id, group, is_compliant, ad_suggestion):
+    conn = sqlite3.connect("bulletins.db")
     c = conn.cursor()
     c.execute('''
         INSERT INTO bulletins (
-            file, summary, aircraft, ata, system, action,
+            file_name, summary, aircraft, ata, system, action,
             compliance, reason, sb_id, group_id, is_compliant, ad_suggestion
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
-        file, summary, aircraft, ata, system, action,
-        compliance, reason, sb_id, group_id, is_compliant, ad_suggestion
+        file_name, summary, aircraft, ata, system, action,
+        compliance, reason, sb_id, group, is_compliant, ad_suggestion
     ))
     conn.commit()
     conn.close()
 
+# Fetch all saved bulletins
 def fetch_all_bulletins():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect("bulletins.db")
     c = conn.cursor()
     c.execute("SELECT * FROM bulletins")
-    results = c.fetchall()
+    rows = c.fetchall()
     conn.close()
-    return results
+    return rows
