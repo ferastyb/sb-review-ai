@@ -1,41 +1,50 @@
 import requests
 from bs4 import BeautifulSoup
+import re
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (compatible; SB-ReviewBot/1.0)"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
 
-def find_relevant_ad(sb_id=None, ata=None, system=None):
-    """
-    Search DuckDuckGo HTML for a relevant Airworthiness Directive (AD),
-    using SB ID, ATA chapter, and system/subject. Returns the first good match.
-    """
-    parts = []
-    if sb_id:
-        parts.append(f'"{sb_id}"')
-    if ata:
-        parts.append(f'"ATA {ata}"')
-    if system:
-        parts.append(f'"{system}"')
-    parts.append("site:regulations.gov OR site:drs.faa.gov OR site:federalregister.gov")
-    parts.append("Airworthiness Directive")
-    query = " ".join(parts)
+def search_google(query):
+    url = f"https://www.google.com/search?q={requests.utils.quote(query)}"
+    response = requests.get(url, headers=HEADERS)
+    if response.status_code != 200:
+        return []
 
-    try:
-        resp = requests.post(
-            "https://html.duckduckgo.com/html/",
-            data={"q": query},
-            headers=HEADERS,
-            timeout=10
-        )
-        resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, "html.parser")
-        for a in soup.find_all("a", class_="result__a", href=True):
-            title = a.get_text()
-            url = a['href']
-            # Look for the AD number we expect
-            if "AD" in title and sb_id in title or ata in title:
-                return {"title": title.strip(), "url": url}
-        return {"title": "No relevant AD found", "url": ""}
-    except Exception as e:
-        return {"title": "Search failed", "url": "", "error": str(e)}
+    soup = BeautifulSoup(response.text, "html.parser")
+    results = []
+
+    for g in soup.select("div.g"):
+        title_elem = g.find("h3")
+        link_elem = g.find("a")
+        if title_elem and link_elem:
+            title = title_elem.text.strip()
+            href = link_elem["href"]
+            results.append({"title": title, "link": href})
+
+    return results
+
+def find_relevant_ad(sb_id, ata=None, system=None):
+    query_variants = [
+        f"Boeing SB {sb_id} AD site:federalregister.gov",
+        f"Airworthiness Directive {sb_id} site:faa.gov",
+    ]
+
+    if ata:
+        query_variants.append(f"ATA {ata} Boeing AD site:federalregister.gov")
+
+    if system:
+        query_variants.append(f"Boeing {system} AD site:federalregister.gov")
+
+    for query in query_variants:
+        print(f"🔍 Searching: {query}")
+        results = search_google(query)
+        for result in results:
+            title = result["title"].lower()
+            if "airworthiness directive" in title or "ad" in title:
+                if sb_id.lower() in title or (ata and ata in title) or (system and system.lower() in title):
+                    return result
+
+    return {"title": "No relevant AD found", "link": ""}
