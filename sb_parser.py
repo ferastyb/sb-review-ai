@@ -12,7 +12,11 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 # Extract text from all pages in the PDF
 def extract_text_from_pdf(pdf_file):
     with pdfplumber.open(pdf_file) as pdf:
-        return "\n".join(page.extract_text() for page in pdf.pages if page.extract_text())
+        return "\n".join(
+            page.extract_text()
+            for page in pdf.pages
+            if page.extract_text()
+        )
 
 # Try to extract common SB sections
 def slice_sections(text):
@@ -31,16 +35,15 @@ def slice_sections(text):
             continue
     return sections
 
-# Use GPT to extract structured info
+# Use GPT to extract structured info, compliance group, and status
 def summarize_with_ai(text, delivery_date=None, aircraft_number=None, max_retries=3):
     sections = slice_sections(text)
-    combined_text = "\n\n".join(sections.values()) if sections else text
-    cleaned_text = combined_text[:12000]  # Limit to first ~12k characters (~3-5 pages)
+    cleaned_text = "\n\n".join(sections.values()) if sections else text
 
     prompt = f"""
 You are an AI assistant that extracts structured information from aircraft service bulletins.
 
-You must return only valid JSON (no commentary). Use the following format exactly:
+You must return only valid JSON (no commentary). Use this exact format:
 
 {{
   "aircraft": ["model1", "model2"],
@@ -61,13 +64,13 @@ Context:
 
 You must:
 - Identify the aircraft group based on number ranges if present.
-- Interpret compliance deadlines (calendar days, flight cycles, or delivery cutoffs).
+- Extract and interpret compliance deadline (calendar days, flight cycles, or delivery cutoffs).
 - Set `is_compliant` based on whether this aircraft meets the compliance time as of today.
 
 Text to process:
-"""
+\"\"\"
 {cleaned_text}
-"""
+\"\"\"
 """
 
     for attempt in range(max_retries):
@@ -82,7 +85,8 @@ Text to process:
             )
 
             content = response.choices[0].message.content.strip()
-            print("\U0001f9e0 GPT Response (raw):")
+
+            print("🧠 GPT Response (raw):")
             print(content)
 
             try:
@@ -97,8 +101,7 @@ Text to process:
                 return {"error": "Invalid JSON from GPT"}
 
         except Exception as e:
-            print(f"\u26a0\ufe0f GPT call failed on attempt {attempt+1}: {e}")
-            print("Prompt content that caused failure:\n", prompt)
+            print(f"⚠️ GPT call failed on attempt {attempt + 1}: {e}")
             time.sleep((2 ** attempt) + 1)
 
     return {"error": "Failed to summarize after retries."}
