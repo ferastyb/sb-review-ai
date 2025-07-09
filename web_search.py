@@ -3,69 +3,47 @@ from bs4 import BeautifulSoup
 import re
 
 FEDERAL_REGISTER_SEARCH = "https://www.federalregister.gov/documents/search"
+FEDERAL_REGISTER_BASE = "https://www.federalregister.gov"
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (compatible; SBReviewAI/1.0)"
+    "User-Agent": "Mozilla/5.0"
 }
-
-def extract_effective_date(text):
-    match = re.search(r"Effective Date[:\s]+([A-Za-z]+ \d{1,2}, \d{4})", text)
-    if match:
-        return match.group(1)
-    return None
 
 def find_relevant_ad(sb_id, ata, system):
     try:
-        # Build combined query
-        query = f"{sb_id} OR {sb_id.split('-')[-1]} OR ATA {ata} {system}"
-
+        query = f"{sb_id} OR ATA {ata} {system}"
         params = {
             "conditions[term]": query,
-            "conditions[agency_ids][]": "27",  # FAA
-            "order": "newest",
-            "per_page": 5
+            "conditions[type][]": "PRORULE",
+            "per_page": 5,
+            "order": "newest"
         }
 
-        response = requests.get(FEDERAL_REGISTER_SEARCH, params=params, headers=HEADERS, timeout=10)
-        response.raise_for_status()
-
+        response = requests.get(FEDERAL_REGISTER_SEARCH, headers=HEADERS, params=params)
         soup = BeautifulSoup(response.text, "html.parser")
-        results = soup.select(".document-wrapper")
+        
+        links = soup.select(".document-result a.document-title")
+        for link in links:
+            ad_title = link.get_text(strip=True)
+            ad_url = FEDERAL_REGISTER_BASE + link.get("href")
 
-        for result in results:
-            title_elem = result.select_one(".document-title")
-            url_elem = result.select_one(".document-title a")
+            ad_page = requests.get(ad_url, headers=HEADERS)
+            ad_soup = BeautifulSoup(ad_page.text, "html.parser")
+            ad_text = ad_soup.get_text()
 
-            if not title_elem or not url_elem:
-                continue
-
-            title = title_elem.get_text(strip=True)
-            url = "https://www.federalregister.gov" + url_elem.get("href")
-
-            # Basic match check
-            if any(part in title for part in [sb_id, sb_id.split('-')[-1], ata, system]):
-                ad_number_match = re.search(r"\b(AD\s*\d{4}-\d{2}-\d{2})\b", title)
-                ad_number = ad_number_match.group(1) if ad_number_match else "Unknown"
-
-                # Load detail page to extract effective date
-                detail_page = requests.get(url, headers=HEADERS, timeout=10)
-                detail_soup = BeautifulSoup(detail_page.text, "html.parser")
-                full_text = detail_soup.get_text()
-                effective_date = extract_effective_date(full_text) or "N/A"
+            if sb_id.lower() in ad_text.lower() or ata in ad_text or system.lower() in ad_text.lower():
+                # Try to extract AD number and effective date
+                ad_number_match = re.search(r"AD\s+(\d{4}-\d{2}-\d{2})", ad_text)
+                effective_date_match = re.search(r"effective\s+(?:on\s+)?([A-Z][a-z]+\s+\d{1,2},\s+\d{4})", ad_text)
 
                 return {
-                    "title": title,
-                    "url": url,
-                    "ad_number": ad_number,
-                    "effective_date": effective_date
+                    "title": ad_number_match.group(1) if ad_number_match else ad_title,
+                    "url": ad_url,
+                    "effective_date": effective_date_match.group(1) if effective_date_match else "N/A"
                 }
 
-    except Exception as e:
-        print(f"⚠️ AD search error: {e}")
+        return {"title": "Not found", "url": "", "effective_date": "N/A"}
 
-    return {
-        "title": "Not found",
-        "url": "",
-        "ad_number": "Not found",
-        "effective_date": "N/A"
-    }
+    except Exception as e:
+        print(f"❌ AD search failed: {e}")
+        return {"title": "Not found", "url": "", "effective_date": "N/A"}
