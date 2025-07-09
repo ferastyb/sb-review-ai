@@ -2,57 +2,31 @@ import requests
 from bs4 import BeautifulSoup
 import re
 
-# Manual override for known matches
-KNOWN_SB_AD_MAP = {
-    "420045": {
-        "title": "AD 2020-06-14 - Loss of Stale Data Monitoring in CCS",
-        "link": "https://www.federalregister.gov/documents/2020/03/23/2020-06092/airworthiness-directives-the-boeing-company-airplanes"
-    }
-}
-
-def find_relevant_ad(sb_id, ata=None, system=None):
-    # Check manual mapping first
-    for key in KNOWN_SB_AD_MAP:
-        if key in sb_id:
-            return KNOWN_SB_AD_MAP[key]
-
-    query_parts = [sb_id]
-    if ata:
-        query_parts.append(f"ATA {ata}")
-    if system:
-        query_parts.append(system)
-
-    query = " ".join(query_parts) + " site:federalregister.gov OR site:faa.gov"
-    print("🔍 Searching:", query)
-
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
-
-    params = {
-        "q": query
-    }
+def find_relevant_ad(sb_id, ata, system):
+    query = f"{sb_id} OR ATA {ata} {system} site:federalregister.gov"
+    search_url = f"https://www.google.com/search?q={requests.utils.quote(query)}"
+    headers = {"User-Agent": "Mozilla/5.0"}
 
     try:
-        res = requests.get("https://html.duckduckgo.com/html/", headers=headers, params=params, timeout=10)
-        soup = BeautifulSoup(res.text, "html.parser")
-        results = soup.select(".result__a")[:10]
+        response = requests.get(search_url, headers=headers)
+        soup = BeautifulSoup(response.text, "html.parser")
+        links = [a["href"] for a in soup.select("a") if "federalregister.gov/documents" in a.get("href", "")]
 
-        for link_tag in results:
-            href = link_tag.get("href")
-            if href and any(domain in href for domain in ["faa.gov", "federalregister.gov"]):
-                page = requests.get(href, headers=headers, timeout=10)
-                if "Airworthiness Directive" in page.text or re.search(r"AD\s?\d{4}-\d{2}-\d{2}", page.text):
-                    title = link_tag.text.strip()
-                    return {
-                        "title": title,
-                        "link": href
-                    }
+        for link in links:
+            ad_page = requests.get(link, headers=headers)
+            ad_soup = BeautifulSoup(ad_page.text, "html.parser")
 
+            ad_number_match = ad_soup.find("h1")
+            effective_date_match = ad_soup.find("strong", string=re.compile("Effective date", re.I))
+
+            ad_number = ad_number_match.get_text(strip=True) if ad_number_match else "Unknown"
+            effective_date = effective_date_match.find_next().get_text(strip=True) if effective_date_match else "Unknown"
+
+            return {
+                "ad_number": ad_number,
+                "effective_date": effective_date
+            }
     except Exception as e:
-        print(f"❌ Web search failed: {e}")
+        print(f"Error fetching AD: {e}")
 
-    return {
-        "title": "No relevant AD found",
-        "link": ""
-    }
+    return {"ad_number": "Not found", "effective_date": "N/A"}
