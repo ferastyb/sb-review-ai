@@ -1,58 +1,82 @@
-import requests
-from bs4 import BeautifulSoup
-import re
+import streamlit as st
+import pandas as pd
+from datetime import date
 
-# Manual override for known matches
-KNOWN_SB_AD_MAP = {
-    "420045": {
-        "title": "AD 2020-06-14 - Loss of Stale Data Monitoring in CCS",
-        "link": "https://www.federalregister.gov/documents/2020/03/23/2020-06092/airworthiness-directives-the-boeing-company-airplanes"
-    }
-}
+from sb_parser import extract_text_from_pdf, summarize_with_ai
+from sb_database import init_db, save_to_db, fetch_all_bulletins
+from web_search import find_relevant_ad
 
-def find_relevant_ad(sb_id, ata=None, system=None):
-    # Check manual mapping first
-    for key in KNOWN_SB_AD_MAP:
-        if key in sb_id:
-            return KNOWN_SB_AD_MAP[key]
+st.set_page_config(page_title="Service Bulletin Previewer", layout="wide")
+init_db()
 
-    query_parts = [sb_id]
-    if ata:
-        query_parts.append(f"ATA {ata}")
-    if system:
-        query_parts.append(system)
+st.title("🔧 Service Bulletin Review Tool")
 
-    query = " ".join(query_parts) + " site:federalregister.gov OR site:faa.gov"
-    print("🔍 Searching:", query)
+aircraft_number = st.text_input("✈️ Enter Aircraft Number (e.g. ZA100)")
+delivery_date = st.date_input("📅 Delivery or Inspection Date", value=date.today())
 
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
+uploaded_files = st.file_uploader("📤 Upload Service Bulletins (PDF)", type="pdf", accept_multiple_files=True)
 
-    params = {
-        "q": query
-    }
+if uploaded_files and aircraft_number:
+    for uploaded_file in uploaded_files:
+        with st.spinner(f"Processing {uploaded_file.name}..."):
+            full_text = extract_text_from_pdf(uploaded_file)
+            result = summarize_with_ai(
+                full_text,
+                delivery_date=delivery_date.isoformat(),
+                aircraft_number=aircraft_number
+            )
 
-    try:
-        res = requests.get("https://html.duckduckgo.com/html/", headers=headers, params=params, timeout=10)
-        soup = BeautifulSoup(res.text, "html.parser")
-        results = soup.select(".result__a")[:10]
+            if not result:
+                st.error("❌ GPT failed to summarize. Invalid JSON from GPT")
+                continue
 
-        for link_tag in results:
-            href = link_tag.get("href")
-            if href and any(domain in href for domain in ["faa.gov", "federalregister.gov"]):
-                page = requests.get(href, headers=headers, timeout=10)
-                if "Airworthiness Directive" in page.text or re.search(r"AD\s?\d{4}-\d{2}-\d{2}", page.text):
-                    title = link_tag.text.strip()
-                    return {
-                        "title": title,
-                        "link": href
-                    }
+            summary = full_text[:1000]  # store partial text
+            aircraft = ", ".join(result.get("aircraft", []))
+            ata = result.get("ata")
+            system = result.get("system")
+            action = result.get("action")
+            compliance = result.get("compliance")
+            reason = result.get("reason")
+            sb_id = result.get("sb_id")
+            group = result.get("group")
+            is_compliant = result.get("is_compliant", False)
 
-    except Exception as e:
-        print(f"❌ Web search failed: {e}")
+            # Suggest AD
+            ad_info = find_relevant_ad(sb_id, ata, system)
+            ad_title = ad_info.get("title", "Not found")
+            ad_effective_date = ad_info.get("effective_date", "N/A")
 
-    return {
-        "title": "No relevant AD found",
-        "link": ""
-    }
+            save_to_db(
+                uploaded_file.name, summary, aircraft, ata, system,
+                action, compliance, reason, sb_id, group, is_compliant,
+                ad_title, ad_effective_date
+            )
+
+            st.success(f"✅ {uploaded_file.name} processed and saved!")
+
+# View DB
+st.subheader("🔍 View Uploaded Bulletins")
+
+search = st.text_input("Search by keyword")
+filter_ata = st.text_input("Filter by ATA chapter (optional)")
+filter_aircraft = st.text_input("Filter by Aircraft type (optional)")
+
+df = pd.DataFrame(fetch_all_bulletins(), columns=[
+    "ID", "File", "Summary", "Aircraft", "ATA", "System", "Action",
+    "Compliance", "Reason", "SB ID", "Group", "Compliant", "AD Number", "AD Effective Date"
+])
+
+if search:
+    df = df[df.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
+if filter_ata:
+    df = df[df["ATA"].astype(str).str.contains(filter_ata)]
+if filter_aircraft:
+    df = df[df["Aircraft"].str.contains(filter_aircraft, case=False)]
+
+st.dataframe(df.drop(columns=["ID", "Reason", "SB ID"]))
+
+if st.checkbox("Show Full Texts"):
+    for _, row in df.iterrows():
+        st.markdown(f"### 📄 {row['File']}")
+        st.markdown("**Extracted Summary**")
+        st.code(row["Summary"])
