@@ -1,30 +1,44 @@
 import requests
 from bs4 import BeautifulSoup
 
-def find_relevant_ad(sb_id, reason):
-    """
-    Searches DuckDuckGo for relevant airworthiness directives based on the SB ID and reason.
-    Returns the title and URL of the top result.
-    """
-    try:
-        # Construct the query using both the Service Bulletin ID and reason
-        query = f"{sb_id} {reason} site:regulations.gov OR site:ecfr.gov"
-        headers = {
-            "User-Agent": "Mozilla/5.0 (compatible; ServiceBulletinAI/1.0)"
-        }
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (compatible; ServiceBulletinBot/1.0; +https://example.com/bot)"
+}
 
-        # Perform the search using DuckDuckGo HTML interface
-        response = requests.get(f"https://html.duckduckgo.com/html/?q={query}", headers=headers)
+def find_relevant_ad(ata_and_system):
+    """
+    Search the web for a relevant AD based on ATA chapter and system/subject.
+    Returns a title and link to the most relevant AD found.
+    """
+    query = f"site:drs.faa.gov OR site:rgl.faa.gov Airworthiness Directive {ata_and_system}"
+    search_url = f"https://www.google.com/search?q={requests.utils.quote(query)}"
+
+    try:
+        response = requests.get(search_url, headers=HEADERS, timeout=10)
+        if response.status_code != 200:
+            return "No AD found (search failed)"
+
         soup = BeautifulSoup(response.text, "html.parser")
 
-        # Extract the first result
-        result = soup.find("a", class_="result__a")
-        if result and result['href']:
-            title = result.get_text()
-            url = result["href"]
-            return f"{title}\n{url}"
-        else:
-            return "No relevant AD found."
+        for link in soup.select("a"):
+            href = link.get("href")
+            title = link.get_text(strip=True)
 
+            if "ad" in title.lower() and ("faa.gov" in href or "drs.faa.gov" in href):
+                clean_url = extract_clean_url(href)
+                return f"{title} - {clean_url}"
+
+        return "No relevant AD found"
     except Exception as e:
-        return f"Error while searching for AD: {e}"
+        return f"Error during AD search: {str(e)}"
+
+def extract_clean_url(href):
+    """
+    Extract a clean URL from a Google search result href.
+    """
+    try:
+        if href.startswith("/url?q="):
+            href = href.split("/url?q=")[1].split("&")[0]
+        return href
+    except Exception:
+        return href
