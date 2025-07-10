@@ -6,38 +6,48 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
 }
 
-def extract_ad_details(text):
-    ad_number = "Not found"
-    effective_date = "N/A"
-    applicability = "N/A"
-    amendment_number = "N/A"
+def extract_ad_number(text):
+    match = re.search(r"AD\s+(\d{4}-\d{2}-\d{0,2})", text)
+    return match.group(1) if match else "Not found"
 
-    ad_match = re.search(r"AD\s+(\d{4}-\d{2}-\d{2})", text)
-    if ad_match:
-        ad_number = ad_match.group(1)
+def extract_effective_date(text):
+    match = re.search(r"Effective\s+Date:?[\s\n]*(\w+\s+\d{1,2},\s+\d{4})", text, re.IGNORECASE)
+    return match.group(1) if match else "N/A"
 
-    date_match = re.search(r"Effective\s+Date:?[\s\n]*(\w+\s+\d{1,2},\s+\d{4})", text, re.IGNORECASE)
-    if date_match:
-        effective_date = date_match.group(1)
+def extract_amendment_number(text):
+    match = re.search(r"Amendment\s+(\d+-\d+)", text)
+    return match.group(1) if match else "N/A"
 
-    applicability_match = re.search(r"Applicability[\s\S]{0,100}This AD applies to[\s\S]*?\.", text, re.IGNORECASE)
-    if applicability_match:
-        applicability = applicability_match.group(0).strip()
+def extract_applicability(text):
+    match = re.search(r"Applicability\s*[:\-]?\s*(.*?)\s+(Compliance|Affected|Subject|Requirement|Summary)", text, re.IGNORECASE | re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    # fallback for generic "applicability"
+    match = re.search(r"Applicability\s*[:\-]?\s*(.*)", text, re.IGNORECASE)
+    return match.group(1).strip() if match else "N/A"
 
-    amendment_match = re.search(r"Amendment\s+39-\d+", text)
-    if amendment_match:
-        amendment_number = amendment_match.group(0)
+def generate_sb_query_variants(sb_id, ata, system):
+    # Extract numeric portion like 420045 from "B787-81205-SB420045-00"
+    match = re.search(r"SB(\d{6})", sb_id)
+    sb_number = match.group(1) if match else sb_id[-6:]
 
-    return ad_number, effective_date, applicability, amendment_number
+    queries = [
+        f"site:federalregister.gov AD for Boeing SB {sb_number}",
+        f"site:federalregister.gov Airworthiness Directive {sb_number}",
+        f"site:federalregister.gov AD {sb_id}",
+        f"site:federalregister.gov Boeing {sb_id} {system}",
+        f"site:federalregister.gov Boeing AD {ata} {system}"
+    ]
+    return queries
 
 def bing_search(query, num_results=5):
-    search_url = f"https://www.bing.com/search?q={query.replace(' ', '+')}"
     try:
-        response = requests.get(search_url, headers=HEADERS, timeout=10)
-        if response.status_code != 200:
+        url = f"https://www.bing.com/search?q={query.replace(' ', '+')}"
+        resp = requests.get(url, headers=HEADERS, timeout=10)
+        if resp.status_code != 200:
             return []
 
-        soup = BeautifulSoup(response.text, "html.parser")
+        soup = BeautifulSoup(resp.text, "html.parser")
         links = []
         for a in soup.find_all("a", href=True):
             href = a["href"]
@@ -51,28 +61,23 @@ def bing_search(query, num_results=5):
 
 def find_relevant_ad(sb_id, ata, system):
     try:
-        parsed_sb = re.search(r"(\d{2})(\d{4})", sb_id)
-        sb_number_simple = parsed_sb.group(1) + parsed_sb.group(2) if parsed_sb else sb_id
-
-        queries = [
-            f"site:federalregister.gov Airworthiness Directive Boeing SB {sb_number_simple}",
-            f"site:federalregister.gov Boeing {sb_number_simple} AD",
-            f"site:federalregister.gov AD for Boeing ATA {ata} {system}"
-        ]
+        queries = generate_sb_query_variants(sb_id, ata, system)
 
         for query in queries:
-            links = bing_search(query)
-            for url in links:
+            results = bing_search(query)
+            for url in results:
                 try:
-                    res = requests.get(url, headers=HEADERS, timeout=10)
-                    if res.status_code != 200:
-                        continue
-
-                    page_text = BeautifulSoup(res.text, "html.parser").get_text(separator="\n")
-
-                    if sb_number_simple in page_text or sb_id in page_text or system.lower() in page_text.lower():
-                        ad_number, eff_date, applicability, amendment = extract_ad_details(page_text)
-                        return ad_number, eff_date, url, applicability, amendment
+                    resp = requests.get(url, timeout=10, headers=HEADERS)
+                    if resp.status_code == 200:
+                        page_text = BeautifulSoup(resp.text, "html.parser").get_text()
+                        if sb_id in page_text or sb_id[-6:] in page_text or ata in page_text or system.lower() in page_text.lower():
+                            return (
+                                extract_ad_number(page_text),
+                                extract_effective_date(page_text),
+                                url,
+                                extract_applicability(page_text),
+                                extract_amendment_number(page_text)
+                            )
                 except Exception:
                     continue
     except Exception:
