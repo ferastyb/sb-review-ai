@@ -1,3 +1,4 @@
+# app.py
 import streamlit as st
 import pandas as pd
 from datetime import date
@@ -8,8 +9,10 @@ from web_search import find_relevant_ad
 st.set_page_config(page_title="Service Bulletin Previewer", layout="wide")
 st.title("📄 Aircraft Service Bulletin Reader")
 
+# Initialize database
 init_db()
 
+# Upload form
 with st.form("upload_form"):
     col1, col2 = st.columns(2)
     with col1:
@@ -30,9 +33,9 @@ if submitted and uploaded_files:
                 st.error(f"❌ GPT failed to summarize: {result['error']}")
                 continue
 
-            # Parse SB number like 420045 from SB ID
-            sb_match = result['sb_id'].split("SB")[-1].replace("-", "")
-            ad_number, ad_date = find_relevant_ad(sb_match, result['ata'], result['system'])
+            ad_number, ad_date, ad_link, ad_applicability, amendment = find_relevant_ad(
+                result['sb_id'], result['ata'], result['system']
+            )
 
             save_to_db(
                 filename=uploaded_file.name,
@@ -47,22 +50,28 @@ if submitted and uploaded_files:
                 group_name=result['group'],
                 is_compliant=result['is_compliant'],
                 ad_number=ad_number,
-                ad_effective_date=ad_date
+                ad_effective_date=ad_date,
+                ad_link=ad_link,
+                ad_applicability=ad_applicability,
+                amendment=amendment
             )
 
 st.markdown("---")
 st.subheader("🔍 View Uploaded Bulletins")
 
+# Filters
 keyword = st.text_input("Search bulletins")
 ata_filter = st.selectbox("Filter by ATA", options=["All"] + [str(i) for i in range(20, 80)])
 aircraft_filter = st.selectbox("Filter by Aircraft", options=["All", "787-8", "787-9", "787-10"])
 
 all_data = fetch_all_bulletins()
 df = pd.DataFrame(all_data, columns=[
-    "File", "Summary", "Aircraft", "ATA", "System", "Action",
-    "Compliance", "Group", "Compliant", "AD Number", "AD Effective Date"
+    "File", "Aircraft", "ATA", "System", "Action",
+    "Compliance", "Group", "Compliant",
+    "AD Number", "AD Effective Date", "AD Link", "AD Applicability", "Amendment Number"
 ])
 
+# Apply filters
 if keyword:
     df = df[df.apply(lambda row: row.astype(str).str.contains(keyword, case=False).any(), axis=1)]
 if ata_filter != "All":
@@ -70,10 +79,12 @@ if ata_filter != "All":
 if aircraft_filter != "All":
     df = df[df["Aircraft"].str.contains(aircraft_filter)]
 
+# Show table
 st.dataframe(df, use_container_width=True)
 
+# Full summaries
 if st.checkbox("Show Full Summaries", value=True):
-    for _, row in df.iterrows():
+    for i, row in df.iterrows():
         st.markdown(f"### 📄 {row['File']}")
         st.markdown("**Extracted Summary**")
-        st.code(row['Summary'])
+        st.code(row['System'])
