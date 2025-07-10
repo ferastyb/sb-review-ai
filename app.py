@@ -1,4 +1,3 @@
-# app.py
 import streamlit as st
 import pandas as pd
 from datetime import date
@@ -33,6 +32,7 @@ if submitted and uploaded_files:
                 st.error(f"❌ GPT failed to summarize: {result['error']}")
                 continue
 
+            # ✅ FIX: Call the function and unpack 5 return values
             ad_number, ad_date, ad_link, ad_applicability, amendment = find_relevant_ad(
                 result['sb_id'], result['ata'], result['system']
             )
@@ -68,7 +68,7 @@ all_data = fetch_all_bulletins()
 df = pd.DataFrame(all_data, columns=[
     "File", "Aircraft", "ATA", "System", "Action",
     "Compliance", "Group", "Compliant",
-    "AD Number", "AD Effective Date", "AD Link", "AD Applicability", "Amendment Number"
+    "AD Number", "AD Effective Date", "AD Link", "AD Applicability", "Amendment"
 ])
 
 # Apply filters
@@ -79,12 +79,12 @@ if ata_filter != "All":
 if aircraft_filter != "All":
     df = df[df["Aircraft"].str.contains(aircraft_filter)]
 
-# Show table
+# Show table (excluding raw Summary)
 st.dataframe(df, use_container_width=True)
 
-# Full summaries
-if st.checkbox("Show Full Summaries", value=True):
+# Optional: Show full summaries
+if st.checkbox("Show Full Summaries", value=False):
     for i, row in df.iterrows():
         st.markdown(f"### 📄 {row['File']}")
         st.markdown("**Extracted Summary**")
-        st.code(row['System'])
+        st.code(row['Summary'])
