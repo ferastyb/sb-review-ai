@@ -1,3 +1,4 @@
+# sb_database.py
 import sqlite3
 
 def init_db():
@@ -5,7 +6,7 @@ def init_db():
     c = conn.cursor()
     c.execute('''
         CREATE TABLE IF NOT EXISTS bulletins (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id INTEGER PRIMARY KEY,
             file_name TEXT,
             summary TEXT,
             aircraft TEXT,
@@ -38,9 +39,8 @@ def save_to_db(
         INSERT INTO bulletins (
             file_name, summary, aircraft, ata, system, action,
             compliance, reason, sb_id, group_id, is_compliant,
-            ad_number, ad_effective_date, ad_link,
-            ad_applicability, amendment
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ad_number, ad_effective_date, ad_link, ad_applicability, amendment
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
         filename, summary, aircraft, ata, system, action,
         compliance, reason, sb_id, group_name, is_compliant,
@@ -53,13 +53,10 @@ def fetch_all_bulletins():
     conn = sqlite3.connect("bulletins.db")
     c = conn.cursor()
     c.execute('''
-        SELECT
-            sb_id, aircraft, ata, system, action,
-            compliance, group_id, is_compliant,
-            ad_number, ad_effective_date, ad_link,
-            ad_applicability, amendment
+        SELECT sb_id, aircraft, ata, system, action, compliance, group_id,
+               is_compliant, ad_number, ad_effective_date, ad_link,
+               ad_applicability, amendment
         FROM bulletins
-        ORDER BY id DESC
     ''')
     rows = c.fetchall()
     conn.close()
