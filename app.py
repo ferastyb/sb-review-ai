@@ -5,7 +5,7 @@ from sb_parser import extract_text_from_pdf, summarize_with_ai
 from sb_database import init_db, save_to_db, fetch_all_bulletins
 from web_search import find_relevant_ad
 
-st.set_page_config(page_title="Service Bulletin Previewer", layout="wide")
+st.set_page_config(page_title="Service Bulletin Review", layout="wide")
 st.title("📄 Aircraft Service Bulletin Reader")
 
 # Initialize database
@@ -32,12 +32,12 @@ if submitted and uploaded_files:
                 st.error(f"❌ GPT failed to summarize: {result['error']}")
                 continue
 
-            # Get AD info
-            ad_number, ad_date, ad_link, ad_applicability, amendment = find_relevant_ad(
+            # Web search for AD
+            ad_number, ad_date, ad_link, ad_applicability, ad_amendment = find_relevant_ad(
                 result['sb_id'], result['ata'], result['system']
             )
 
-            # Save to DB
+            # Save to database
             save_to_db(
                 filename=uploaded_file.name,
                 summary=text,
@@ -54,9 +54,10 @@ if submitted and uploaded_files:
                 ad_effective_date=ad_date,
                 ad_link=ad_link,
                 ad_applicability=ad_applicability,
-                amendment=amendment
+                ad_amendment=ad_amendment
             )
 
+# Divider
 st.markdown("---")
 st.subheader("🔍 View Uploaded Bulletins")
 
@@ -65,11 +66,11 @@ keyword = st.text_input("Search bulletins")
 ata_filter = st.selectbox("Filter by ATA", options=["All"] + [str(i) for i in range(20, 80)])
 aircraft_filter = st.selectbox("Filter by Aircraft", options=["All", "787-8", "787-9", "787-10"])
 
-# Fetch data and build table
+# Load data
 all_data = fetch_all_bulletins()
 df = pd.DataFrame(all_data, columns=[
     "SB No.", "Aircraft", "ATA", "System", "Action", "Compliance", "Group",
-    "Compliant", "AD Number", "AD Effective Date", "AD Link", "AD Applicability", "Amendment"
+    "Compliant", "AD Number", "AD Effective Date", "AD Link", "AD Applicability", "AD Amendment"
 ])
 
 # Apply filters
@@ -80,5 +81,12 @@ if ata_filter != "All":
 if aircraft_filter != "All":
     df = df[df["Aircraft"].str.contains(aircraft_filter)]
 
-# Show table
+# Display
 st.dataframe(df, use_container_width=True)
+
+# Show full summaries
+if st.checkbox("Show Full Summaries", value=True):
+    for i, row in df.iterrows():
+        st.markdown(f"### 📄 {row['SB No.']}")
+        st.markdown("**Extracted Summary**")
+        st.code(row['Compliant'])  # Adjust this if you want to display actual summary content
