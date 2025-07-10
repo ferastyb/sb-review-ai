@@ -1,102 +1,84 @@
+# app.py
 import streamlit as st
 import pandas as pd
 from datetime import date
-
 from sb_parser import extract_text_from_pdf, summarize_with_ai
 from sb_database import init_db, save_to_db, fetch_all_bulletins
 from web_search import find_relevant_ad
 
-# Initialize app
 st.set_page_config(page_title="Service Bulletin Previewer", layout="wide")
-init_db()
-
 st.title("📄 Aircraft Service Bulletin Reader")
 
-# User inputs for compliance checks
-col1, col2 = st.columns(2)
-with col1:
-    aircraft_number = st.text_input("✈️ Aircraft Number", "")
-with col2:
-    delivery_date = st.date_input("📆 Delivery or Inspection Date", value=date.today())
+# Initialize database
+init_db()
 
-uploaded_files = st.file_uploader("Upload Service Bulletins (PDF)", type="pdf", accept_multiple_files=True)
+# Upload form
+with st.form("upload_form"):
+    col1, col2 = st.columns(2)
+    with col1:
+        aircraft_number = st.text_input("✈️ Aircraft Number")
+    with col2:
+        delivery_date = st.date_input("📅 Delivery or Inspection Date", value=date.today())
 
-if uploaded_files and aircraft_number and delivery_date:
+    uploaded_files = st.file_uploader("📎 Upload Service Bulletins (PDF)", type=["pdf"], accept_multiple_files=True)
+    submitted = st.form_submit_button("Process PDFs")
+
+if submitted and uploaded_files:
     for uploaded_file in uploaded_files:
         with st.spinner(f"Processing {uploaded_file.name}..."):
-            full_text = extract_text_from_pdf(uploaded_file)
-            result = summarize_with_ai(
-                full_text,
-                delivery_date=delivery_date.isoformat(),
-                aircraft_number=aircraft_number
-            )
+            text = extract_text_from_pdf(uploaded_file)
+            result = summarize_with_ai(text, delivery_date, aircraft_number)
 
             if "error" in result:
-                st.error("❌ GPT failed to summarize: " + result["error"])
+                st.error(f"❌ GPT failed to summarize: {result['error']}")
                 continue
 
-            # Extract structured values
-            summary = str(result)
-            aircraft = ", ".join(result.get("aircraft", []))
-            ata = result.get("ata", "")
-            system = result.get("system", "")
-            action = result.get("action", "")
-            compliance = result.get("compliance", "")
-            reason = result.get("reason", "")
-            sb_id = result.get("sb_id", "")
-            group = result.get("group", "")
-            is_compliant = result.get("is_compliant", False)
+            ad_number, ad_date = find_relevant_ad(result['sb_id'], result['ata'], result['system'])
 
-            # Find relevant AD
-            ad_info = find_relevant_ad(sb_id, ata, system)
-            ad_number = ad_info.get("ad_number", "")
-            ad_effective_date = ad_info.get("effective_date", "")
-
-            # Save to DB
             save_to_db(
-                uploaded_file.name, summary, aircraft, ata, system,
-                action, compliance, reason, sb_id, group, is_compliant,
-                ad_number, ad_effective_date
+                filename=uploaded_file.name,
+                summary=text,
+                aircraft=", ".join(result['aircraft']),
+                ata=result['ata'],
+                system=result['system'],
+                action=result['action'],
+                compliance=result['compliance'],
+                reason=result['reason'],
+                sb_id=result['sb_id'],
+                group_name=result['group'],
+                is_compliant=result['is_compliant'],
+                ad_number=ad_number,
+                ad_effective_date=ad_date
             )
 
-            st.success(f"✅ {uploaded_file.name} processed and saved!")
-
-st.divider()
+st.markdown("---")
 st.subheader("🔍 View Uploaded Bulletins")
 
-# Load from DB
+# Filters
+keyword = st.text_input("Search bulletins")
+ata_filter = st.selectbox("Filter by ATA", options=["All"] + [str(i) for i in range(20, 80)])
+aircraft_filter = st.selectbox("Filter by Aircraft", options=["All", "787-8", "787-9", "787-10"])
+
 all_data = fetch_all_bulletins()
 df = pd.DataFrame(all_data, columns=[
-    "ID", "File", "Summary", "Aircraft", "ATA", "System", "Action",
-    "Compliance", "Reason", "SB ID", "Group", "Compliant",
-    "AD Number", "AD Effective Date"
+    "File", "Summary", "Aircraft", "ATA", "System", "Action",
+    "Compliance", "Group", "Compliant", "AD Number", "AD Effective Date"
 ])
 
-# Search bar
-search_term = st.text_input("Search bulletins", "")
-if search_term:
-    df = df[df.astype(str).apply(lambda x: x.str.contains(search_term, case=False)).any(axis=1)]
-
-# Filters
-col3, col4 = st.columns(2)
-with col3:
-    selected_ata = st.selectbox("Filter by ATA", options=["All"] + sorted(df["ATA"].dropna().unique().tolist()))
-    if selected_ata != "All":
-        df = df[df["ATA"] == selected_ata]
-
-with col4:
-    selected_aircraft = st.selectbox("Filter by Aircraft", options=["All"] + sorted(df["Aircraft"].dropna().unique().tolist()))
-    if selected_aircraft != "All":
-        df = df[df["Aircraft"].str.contains(selected_aircraft)]
+# Apply filters
+if keyword:
+    df = df[df.apply(lambda row: row.astype(str).str.contains(keyword, case=False).any(), axis=1)]
+if ata_filter != "All":
+    df = df[df["ATA"] == ata_filter]
+if aircraft_filter != "All":
+    df = df[df["Aircraft"].str.contains(aircraft_filter)]
 
 # Show table
-st.dataframe(df[[
-    "File", "Aircraft", "ATA", "System", "Action", "Compliance",
-    "Group", "Compliant", "AD Number", "AD Effective Date"
-]])
+st.dataframe(df, use_container_width=True)
 
-# Optional full summaries
-if st.checkbox("Show Full Summaries"):
+# Full summaries
+if st.checkbox("Show Full Summaries", value=True):
     for i, row in df.iterrows():
         st.markdown(f"### 📄 {row['File']}")
-        st.text_area("Extracted Summary", row["Summary"], height=200, key=f"summary_{i}")
+        st.markdown("**Extracted Summary**")
+        st.code(row['Summary'])
