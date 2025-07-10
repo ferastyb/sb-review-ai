@@ -1,3 +1,4 @@
+# app.py
 import streamlit as st
 import pandas as pd
 from datetime import date
@@ -11,7 +12,6 @@ st.title("📄 Aircraft Service Bulletin Reader")
 # Initialize database
 init_db()
 
-# Upload form
 with st.form("upload_form"):
     col1, col2 = st.columns(2)
     with col1:
@@ -32,12 +32,10 @@ if submitted and uploaded_files:
                 st.error(f"❌ GPT failed to summarize: {result['error']}")
                 continue
 
-            # Get AD info
             ad_number, ad_date, ad_link, ad_applicability, amendment = find_relevant_ad(
                 result['sb_id'], result['ata'], result['system']
             )
 
-            # Save to DB
             save_to_db(
                 filename=uploaded_file.name,
                 summary=text,
@@ -65,7 +63,7 @@ keyword = st.text_input("Search bulletins")
 ata_filter = st.selectbox("Filter by ATA", options=["All"] + [str(i) for i in range(20, 80)])
 aircraft_filter = st.selectbox("Filter by Aircraft", options=["All", "787-8", "787-9", "787-10"])
 
-# Fetch data and build table
+# Table display
 all_data = fetch_all_bulletins()
 df = pd.DataFrame(all_data, columns=[
     "SB No.", "Aircraft", "ATA", "System", "Action", "Compliance", "Group",
@@ -80,5 +78,4 @@ if ata_filter != "All":
 if aircraft_filter != "All":
     df = df[df["Aircraft"].str.contains(aircraft_filter)]
 
-# Show table
 st.dataframe(df, use_container_width=True)
