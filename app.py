@@ -56,7 +56,7 @@ st.subheader("🔍 View Uploaded Bulletins")
 
 # Filters
 keyword = st.text_input("Search bulletins")
-ata_filter = st.selectbox("Filter by ATA", options=["All"] + [str(i) for i in range(20, 80)])
+ata_filter = st.selectbox("Filter by ATA", options=["All"] + sorted({str(i) for i in range(20, 100)}))
 aircraft_filter = st.selectbox("Filter by Aircraft", options=["All", "787-8", "787-9", "787-10"])
 
 all_data = fetch_all_bulletins()
