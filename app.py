@@ -32,7 +32,6 @@ if submitted and uploaded_files:
                 st.error(f"❌ GPT failed to summarize: {result['error']}")
                 continue
 
-            # ✅ FIX: Call the function and unpack 5 return values
             ad_number, ad_date, ad_link, ad_applicability, amendment = find_relevant_ad(
                 result['sb_id'], result['ata'], result['system']
             )
@@ -53,7 +52,7 @@ if submitted and uploaded_files:
                 ad_effective_date=ad_date,
                 ad_link=ad_link,
                 ad_applicability=ad_applicability,
-                amendment=amendment
+                amendment_number=amendment
             )
 
 st.markdown("---")
@@ -66,8 +65,7 @@ aircraft_filter = st.selectbox("Filter by Aircraft", options=["All", "787-8", "7
 
 all_data = fetch_all_bulletins()
 df = pd.DataFrame(all_data, columns=[
-    "File", "Aircraft", "ATA", "System", "Action",
-    "Compliance", "Group", "Compliant",
+    "File", "Aircraft", "ATA", "System", "Action", "Compliance", "Group", "Compliant",
     "AD Number", "AD Effective Date", "AD Link", "AD Applicability", "Amendment"
 ])
 
@@ -79,12 +77,15 @@ if ata_filter != "All":
 if aircraft_filter != "All":
     df = df[df["Aircraft"].str.contains(aircraft_filter)]
 
-# Show table (excluding raw Summary)
-st.dataframe(df, use_container_width=True)
+# Show table
+st.dataframe(df.drop(columns=["AD Link", "AD Applicability", "Amendment"]), use_container_width=True)
 
-# Optional: Show full summaries
-if st.checkbox("Show Full Summaries", value=False):
-    for i, row in df.iterrows():
-        st.markdown(f"### 📄 {row['File']}")
-        st.markdown("**Extracted Summary**")
-        st.code(row['Summary'])
+# AD details (optional expanders)
+for i, row in df.iterrows():
+    with st.expander(f"📎 AD Details for {row['File']}"):
+        st.markdown(f"**AD Number:** {row['AD Number']}")
+        st.markdown(f"**Effective Date:** {row['AD Effective Date']}")
+        st.markdown(f"**Amendment:** {row['Amendment']}")
+        st.markdown(f"**Applicability:** {row['AD Applicability']}")
+        if row['AD Link'] != "N/A":
+            st.markdown(f"[View AD Document]({row['AD Link']})", unsafe_allow_html=True)
