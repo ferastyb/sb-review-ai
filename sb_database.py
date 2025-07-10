@@ -1,10 +1,9 @@
 import sqlite3
 
-# Initialize or upgrade the database schema
 def init_db():
-    conn = sqlite3.connect("sb_data.db")
+    conn = sqlite3.connect("bulletins.db")
     c = conn.cursor()
-    c.execute("""
+    c.execute('''
         CREATE TABLE IF NOT EXISTS bulletins (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             file_name TEXT,
@@ -22,46 +21,43 @@ def init_db():
             ad_effective_date TEXT,
             ad_link TEXT,
             ad_applicability TEXT,
-            amendment TEXT
+            amendment_number TEXT
         )
-    """)
+    ''')
     conn.commit()
     conn.close()
 
-# Save SB record
 def save_to_db(
-    filename, summary, aircraft, ata, system, action,
-    compliance, reason, sb_id, group_name, is_compliant,
-    ad_number, ad_effective_date, ad_link, ad_applicability, amendment
+    filename, summary, aircraft, ata, system, action, compliance, reason,
+    sb_id, group_name, is_compliant,
+    ad_number, ad_effective_date, ad_link, ad_applicability, amendment_number
 ):
-    conn = sqlite3.connect("sb_data.db")
+    conn = sqlite3.connect("bulletins.db")
     c = conn.cursor()
-    c.execute("""
+    c.execute('''
         INSERT INTO bulletins (
             file_name, summary, aircraft, ata, system, action,
             compliance, reason, sb_id, group_id, is_compliant,
-            ad_number, ad_effective_date, ad_link, ad_applicability, amendment
+            ad_number, ad_effective_date, ad_link, ad_applicability, amendment_number
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
+    ''', (
         filename, summary, aircraft, ata, system, action,
         compliance, reason, sb_id, group_name, is_compliant,
-        ad_number, ad_effective_date, ad_link, ad_applicability, amendment
+        ad_number, ad_effective_date, ad_link, ad_applicability, amendment_number
     ))
     conn.commit()
     conn.close()
 
-# Fetch all records for display
 def fetch_all_bulletins():
-    conn = sqlite3.connect("sb_data.db")
+    conn = sqlite3.connect("bulletins.db")
     c = conn.cursor()
-    c.execute("""
-        SELECT 
+    c.execute('''
+        SELECT
             file_name, aircraft, ata, system, action, compliance,
             group_id, is_compliant, ad_number, ad_effective_date,
-            ad_link, ad_applicability, amendment, summary
+            ad_link, ad_applicability, amendment_number
         FROM bulletins
-        ORDER BY id DESC
-    """)
+    ''')
     rows = c.fetchall()
     conn.close()
     return rows
