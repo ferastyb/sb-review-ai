@@ -6,10 +6,8 @@ import json
 import re
 from datetime import date
 
-# Load API key from environment variable
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Extract text from all pages in the PDF
 def extract_text_from_pdf(pdf_file):
     with pdfplumber.open(pdf_file) as pdf:
         return "\n".join(
@@ -18,7 +16,7 @@ def extract_text_from_pdf(pdf_file):
             if page.extract_text()
         )
 
-# Try to extract common SB sections
+# Improved section slicing that is robust to missing headers
 def slice_sections(text):
     labels = [
         "Effectivity", "Applicability", "Affected Aircraft",
@@ -26,16 +24,20 @@ def slice_sections(text):
         "Compliance", "Action", "Accomplishment Instructions"
     ]
     sections = {}
+    lowered_text = text.lower()
     for i, label in enumerate(labels):
         try:
-            start = text.index(label)
-            end = text.index(labels[i + 1]) if i + 1 < len(labels) else len(text)
-            sections[label] = text[start:end]
+            start = lowered_text.index(label.lower())
+            next_label = labels[i + 1] if i + 1 < len(labels) else None
+            if next_label:
+                end = lowered_text.index(next_label.lower(), start)
+            else:
+                end = len(text)
+            sections[label] = text[start:end].strip()
         except ValueError:
             continue
     return sections
 
-# Use GPT to extract structured info, compliance group, and status
 def summarize_with_ai(text, delivery_date=None, aircraft_number=None, max_retries=3):
     sections = slice_sections(text)
     cleaned_text = "\n\n".join(sections.values()) if sections else text
@@ -83,9 +85,7 @@ Text to process:
                 ],
                 temperature=0.2
             )
-
             content = response.choices[0].message.content.strip()
-
             print("🧠 GPT Response (raw):")
             print(content)
 
