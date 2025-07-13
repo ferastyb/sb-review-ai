@@ -1,9 +1,7 @@
 import sqlite3
 
-DB_NAME = "bulletins.db"
-
 def init_db():
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect("bulletins.db")
     c = conn.cursor()
     c.execute('''
         CREATE TABLE IF NOT EXISTS bulletins (
@@ -30,11 +28,11 @@ def init_db():
     conn.close()
 
 def save_to_db(
-    filename, summary, aircraft, ata, system, action, compliance,
-    reason, sb_id, group, is_compliant,
+    filename, summary, aircraft, ata, system, action,
+    compliance, reason, sb_id, group, is_compliant,
     ad_number, ad_effective_date, ad_link, ad_applicability, ad_amendment
 ):
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect("bulletins.db")
     c = conn.cursor()
     c.execute('''
         INSERT INTO bulletins (
@@ -43,15 +41,15 @@ def save_to_db(
             ad_number, ad_effective_date, ad_link, ad_applicability, ad_amendment
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
-        filename, summary, aircraft, ata, system, action, compliance,
-        reason, sb_id, group, is_compliant,
+        filename, summary, aircraft, ata, system, action,
+        compliance, reason, sb_id, group, is_compliant,
         ad_number, ad_effective_date, ad_link, ad_applicability, ad_amendment
     ))
     conn.commit()
     conn.close()
 
 def fetch_all_bulletins():
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect("bulletins.db")
     c = conn.cursor()
     c.execute('''
         SELECT
