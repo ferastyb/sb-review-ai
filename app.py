@@ -15,7 +15,7 @@ init_db()
 with st.form("upload_form"):
     col1, col2 = st.columns(2)
     with col1:
-        aircraft_number = st.text_input("✈️ Aircraft Number")
+        aircraft_number = st.text_input("✈️ Aircraft variable Number")
     with col2:
         delivery_date = st.date_input("📅 Delivery or Inspection Date", value=date.today())
 
