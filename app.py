@@ -58,7 +58,7 @@ if submitted and uploaded_files:
                 ad_effective_date=ad_date,
                 ad_link=ad_link,
                 ad_applicability=ad_applicability,
-                amendment=amendment
+                ad_amendment=amendment
             )
 
 st.markdown("---")
