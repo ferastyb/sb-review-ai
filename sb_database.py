@@ -1,7 +1,10 @@
 import sqlite3
+import os
+
+DB_FILE = "bulletins.db"
 
 def init_db():
-    conn = sqlite3.connect("bulletins.db")
+    conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute('''
         CREATE TABLE IF NOT EXISTS bulletins (
@@ -21,7 +24,7 @@ def init_db():
             ad_effective_date TEXT,
             ad_link TEXT,
             ad_applicability TEXT,
-            amendment TEXT
+            ad_amendment TEXT
         )
     ''')
     conn.commit()
@@ -29,35 +32,40 @@ def init_db():
 
 def save_to_db(
     filename, summary, aircraft, ata, system, action,
-    compliance, reason, sb_id, group_name, is_compliant,
-    ad_number, ad_effective_date, ad_link, ad_applicability, amendment
+    compliance, reason, sb_id, group, is_compliant,
+    ad_number, ad_effective_date, ad_link, ad_applicability, ad_amendment
 ):
-    conn = sqlite3.connect("bulletins.db")
+    init_db()
+    conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
+
+    # Always overwrite if SB already exists
+    c.execute("DELETE FROM bulletins WHERE sb_id = ?", (sb_id,))
+
     c.execute('''
         INSERT INTO bulletins (
             file_name, summary, aircraft, ata, system, action,
             compliance, reason, sb_id, group_id, is_compliant,
-            ad_number, ad_effective_date, ad_link,
-            ad_applicability, amendment
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ad_number, ad_effective_date, ad_link, ad_applicability, ad_amendment
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
         filename, summary, aircraft, ata, system, action,
-        compliance, reason, sb_id, group_name, is_compliant,
-        ad_number, ad_effective_date, ad_link, ad_applicability, amendment
+        compliance, reason, sb_id, group, is_compliant,
+        ad_number, ad_effective_date, ad_link, ad_applicability, ad_amendment
     ))
+
     conn.commit()
     conn.close()
 
 def fetch_all_bulletins():
-    conn = sqlite3.connect("bulletins.db")
+    init_db()
+    conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute('''
         SELECT
             sb_id, aircraft, ata, system, action,
             compliance, group_id, is_compliant,
-            ad_number, ad_effective_date, ad_link,
-            ad_applicability, amendment
+            ad_number, ad_effective_date, ad_link, ad_applicability, ad_amendment
         FROM bulletins
         ORDER BY id DESC
     ''')
