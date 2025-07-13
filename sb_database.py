@@ -1,6 +1,6 @@
 import sqlite3
 
-def init_db():
+def create_tables():
     conn = sqlite3.connect("bulletins.db")
     c = conn.cursor()
     c.execute('''
@@ -21,30 +21,38 @@ def init_db():
             ad_effective_date TEXT,
             ad_link TEXT,
             ad_applicability TEXT,
-            amendment TEXT
+            ad_amendment TEXT
         )
     ''')
     conn.commit()
     conn.close()
 
-def save_to_db(
-    filename, summary, aircraft, ata, system, action,
-    compliance, reason, sb_id, group_name, is_compliant,
-    ad_number, ad_effective_date, ad_link, ad_applicability, amendment
-):
+def save_to_db(**kwargs):
     conn = sqlite3.connect("bulletins.db")
     c = conn.cursor()
     c.execute('''
         INSERT INTO bulletins (
-            file_name, summary, aircraft, ata, system, action,
-            compliance, reason, sb_id, group_id, is_compliant,
-            ad_number, ad_effective_date, ad_link,
-            ad_applicability, amendment
+            file_name, summary, aircraft, ata, system, action, compliance, reason,
+            sb_id, group_id, is_compliant, ad_number, ad_effective_date,
+            ad_link, ad_applicability, ad_amendment
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
-        filename, summary, aircraft, ata, system, action,
-        compliance, reason, sb_id, group_name, is_compliant,
-        ad_number, ad_effective_date, ad_link, ad_applicability, amendment
+        kwargs['filename'],
+        kwargs['summary'],
+        kwargs['aircraft'],
+        kwargs['ata'],
+        kwargs['system'],
+        kwargs['action'],
+        kwargs['compliance'],
+        kwargs['reason'],
+        kwargs['sb_id'],
+        kwargs['group'],
+        kwargs['is_compliant'],
+        kwargs['ad_number'],
+        kwargs['ad_effective_date'],
+        kwargs['ad_link'],
+        kwargs['ad_applicability'],
+        kwargs['ad_amendment']
     ))
     conn.commit()
     conn.close()
@@ -57,9 +65,8 @@ def fetch_all_bulletins():
             sb_id, aircraft, ata, system, action,
             compliance, group_id, is_compliant,
             ad_number, ad_effective_date, ad_link,
-            ad_applicability, amendment
+            ad_applicability, ad_amendment
         FROM bulletins
-        ORDER BY id DESC
     ''')
     rows = c.fetchall()
     conn.close()
