@@ -52,7 +52,7 @@ if submitted and uploaded_files:
                 compliance=result['compliance'],
                 reason=result['reason'],
                 sb_id=result['sb_id'],
-                group_name=result['group'],
+                group=result['group'],
                 is_compliant=result['is_compliant'],
                 ad_number=ad_number,
                 ad_effective_date=ad_date,
