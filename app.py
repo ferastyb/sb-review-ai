@@ -5,6 +5,10 @@ from sb_parser import extract_text_from_pdf, summarize_with_ai
 from sb_database import init_db, save_to_db, fetch_all_bulletins
 from web_search import find_relevant_ad
 
+from sb_database import init_db
+init_db()
+
+
 st.set_page_config(page_title="Service Bulletin Previewer", layout="wide")
 st.title("📄 Aircraft Service Bulletin Reader")
 
