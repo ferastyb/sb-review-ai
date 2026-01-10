@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>SRM Damage Assessment Tool • Feras Aviation</title>
+  <title>Aircraft Service Bulletin Reader • Feras Aviation</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <!-- Favicon (relative path for GitHub Pages project sites) -->
@@ -286,7 +286,7 @@
     <a class="brand" href="https://www.ferasaviation.info" target="_self" aria-label="Go to Feras Aviation">
       <img src="assets/FA_logo.png?v=3" alt="Feras Aviation Logo" />
       <span class="divider"></span>
-      <h1>SRM Damage Assessment Tool</h1>
+      <h1>Aircraft Service Bulletin Reader</h1>
     </a>
 
     <span class="meta">Prototype • Advisory use only</span>
@@ -294,10 +294,10 @@
 
   <div class="shell">
     <div class="notice" role="note" aria-label="Advisory notice">
-      <strong>Advisory tool — verify against the current SRM and operator procedures.</strong>
+      <strong>Advisory tool — verify against the current SB and operator procedures.</strong>
       <p>
         Outputs are generated from prototype rules and user-provided inputs.
-        Always confirm applicability, limits, and repair actions using the latest approved documentation.
+        Always confirm applicability, limits, and accomplishment actions using the latest approved documentation.
       </p>
     </div>
 
@@ -305,7 +305,7 @@
       <div class="frame-topbar">
         <div class="left">
           <div class="title">Fuselage Dent Checker (Prototype)</div>
-          <div class="sub">Quick AOG entry supported • Logs saved in SQLite (app-side)</div>
+          <div class="sub">Quick SB viewing supported • Logs saved in SQLite (app-side)</div>
         </div>
 
         <div class="tools">
@@ -327,8 +327,8 @@
 
       <iframe
         id="srmFrame"
-        src="https://srm-damage-assessment.streamlit.app/?embed=true"
-        title="SRM Damage Assessment Tool"
+        src="https://sbreviewer.streamlit.app/?embed=true"
+        title="Aircraft Service Bulletin Reader"
         loading="lazy"
         scrolling="no"
       ></iframe>
