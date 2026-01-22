@@ -9,4 +9,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Curl Streamlit App
-        run: curl -s https://your-app-name.streamlit.app/ > /dev/null
+        run: curl -s https://sbreviewer.streamlit.app/ > /dev/null
